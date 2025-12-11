@@ -7,7 +7,6 @@ interface TShirtMockupProps {
   design?: string | null;
   material: string;
   size: string;
-  useEnhancedCompositing?: boolean;
 }
 
 const TShirtMockup: React.FC<TShirtMockupProps> = ({
@@ -15,14 +14,11 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
   design,
   material,
   size,
-  useEnhancedCompositing = false,
 }) => {
   const [category, setCategory] = useState("T-shirt");
   const [selectedMaterial, setSelectedMaterial] = useState(material || "Cotton");
   const [selectedSize, setSelectedSize] = useState(size || "M");
-  const [enhancedMockupUrl, setEnhancedMockupUrl] = useState<string | null>(null);
-  const [isGeneratingEnhanced, setIsGeneratingEnhanced] = useState(false);
-  const [enhancedCompositingEnabled, setEnhancedCompositingEnabled] = useState(useEnhancedCompositing);
+
 
   const getSizeScale = () => {
     switch (selectedSize) {
@@ -47,88 +43,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
 
   const rotateRef = useRef<HTMLDivElement | null>(null);
 
-  // Enhanced compositing function
-  const generateEnhancedMockup = useCallback(async () => {
-    if (!design) return;
-    
-    setIsGeneratingEnhanced(true);
-    
-    try {
-      const tshirtConfig = {
-        color: color,
-        material: selectedMaterial.toLowerCase(),
-        style: category.toLowerCase().replace(' ', '-')
-      };
-      
-      const options = {
-        lightingConfig: {
-          ambientIntensity: 0.3,
-          directionalLight: {
-            angle: 45,
-            intensity: 0.7,
-            color: '#ffffff'
-          },
-          shadows: {
-            enabled: true,
-            softness: 0.5,
-            opacity: 0.3
-          }
-        },
-        foldPattern: {
-          type: 'hanging',
-          intensity: 0.3
-        },
-        inkEffects: {
-          bleedRadius: selectedMaterial.toLowerCase() === 'cotton' ? 2 : 1,
-          opacity: 0.3,
-          colorShift: 0.1
-        },
-        designWidth: designState.width,
-        designHeight: designState.height,
-        designX: designState.x,
-        designY: designState.y
-      };
-      
-      const response = await fetch('http://localhost:5001/api/enhanced-mockup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          designImageUrl: design,
-          tshirtConfig: tshirtConfig,
-          options: options
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        setEnhancedMockupUrl(result.mockupUrl);
-        console.log('✅ Enhanced mockup generated:', result.mockupUrl);
-      } else {
-        console.error('❌ Enhanced mockup generation failed:', result.error);
-        alert('Enhanced mockup generation failed: ' + result.error.message);
-      }
-    } catch (error) {
-      console.error('❌ Enhanced mockup error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert('Enhanced mockup generation error: ' + errorMessage);
-    } finally {
-      setIsGeneratingEnhanced(false);
-    }
-  }, [design, color, selectedMaterial, category, designState]);
 
-  // Auto-generate enhanced mockup when enabled and design changes
-  React.useEffect(() => {
-    if (enhancedCompositingEnabled && design && !isGeneratingEnhanced) {
-      const timer = setTimeout(() => {
-        generateEnhancedMockup();
-      }, 1000); // Debounce for 1 second
-      
-      return () => clearTimeout(timer);
-    }
-  }, [enhancedCompositingEnabled, design, color, selectedMaterial, category, designState, generateEnhancedMockup, isGeneratingEnhanced]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -216,17 +131,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           Back-print!
         </button>
 
-        <button
-          onClick={() => setEnhancedCompositingEnabled(!enhancedCompositingEnabled)}
-          className={cn(
-            "px-4 py-1.5 text-sm rounded-lg transition-colors font-medium",
-            enhancedCompositingEnabled
-              ? "bg-green-500 text-white hover:bg-green-600"
-              : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-          )}
-        >
-          {enhancedCompositingEnabled ? "Enhanced ✓" : "Enhanced"}
-        </button>
+
 
 
       </div>
@@ -247,33 +152,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           paddingTop: 0
         }}
       >
-        {/* Enhanced Mockup Display */}
-        {enhancedMockupUrl && enhancedCompositingEnabled ? (
-          <div className="relative w-full h-full">
-            <img
-              src={enhancedMockupUrl}
-              alt="Enhanced T-shirt mockup"
-              className="absolute inset-0 w-full h-full object-contain z-30 pointer-events-none"
-              draggable={false}
-            />
-            
-            {/* Enhanced mockup indicator */}
-            <div className="absolute top-4 right-4 z-40 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">
-              Enhanced Compositing
-            </div>
-            
-            {/* Loading overlay */}
-            {isGeneratingEnhanced && (
-              <div className="absolute inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="bg-white rounded-lg p-4 flex items-center space-x-3">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
-                  <span className="text-gray-700 font-medium">Generating Enhanced Mockup...</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
+        {/* T-shirt Mockup Display */}
+        <>
             {/* Base Shirt */}
             <img
               src="/mockups/tshirt.png"
@@ -282,13 +162,13 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
               draggable={false}
             />
 
-            {/* Improved Natural Color Blending */}
+            {/* Natural T-shirt Color Blending */}
             <div
               className="absolute inset-0 z-20 pointer-events-none"
               style={{
                 backgroundColor: color,
                 mixBlendMode: "multiply",
-                opacity: 0.75,
+                opacity: color === "#FFFFFF" ? 0.1 : 0.8,
                 maskImage: "url(/mockups/tshirt.png)",
                 WebkitMaskImage: "url(/mockups/tshirt.png)",
                 maskRepeat: "no-repeat",
@@ -297,12 +177,28 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
               }}
             />
             
-            {/* Enhanced fold definition layer */}
+            {/* Fabric Depth and Fold Definition */}
             <div
               className="absolute inset-0 z-21 pointer-events-none"
               style={{
-                backgroundColor: color,
+                backgroundColor: color === "#FFFFFF" ? "#f5f5f5" : color,
                 mixBlendMode: "soft-light",
+                opacity: 0.3,
+                maskImage: "url(/mockups/tshirt.png)",
+                WebkitMaskImage: "url(/mockups/tshirt.png)",
+                maskRepeat: "no-repeat",
+                maskPosition: "center",
+                maskSize: "contain",
+              }}
+            />
+
+            {/* Subtle Fabric Texture Overlay */}
+            <div
+              className="absolute inset-0 z-22 pointer-events-none"
+              style={{
+                background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%), 
+                           radial-gradient(circle at 70% 80%, rgba(0,0,0,0.05) 0%, transparent 50%)`,
+                mixBlendMode: "overlay",
                 opacity: 0.4,
                 maskImage: "url(/mockups/tshirt.png)",
                 WebkitMaskImage: "url(/mockups/tshirt.png)",
@@ -342,7 +238,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                     position: "relative",
                   }}
                 >
-                  {/* --- Main Printed Effect --- */}
+                  {/* Base Design Layer - High Opacity for Color Preservation */}
                   <img
                     src={design}
                     alt="Printed design"
@@ -350,14 +246,29 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                     draggable={false}
                     style={{
                       objectFit: "contain",
-                      mixBlendMode: "overlay", // interacts with shirt color & folds
-                      opacity: 0.92,
-                      filter: "contrast(1.05) brightness(0.97) saturate(1.1)",
+                      mixBlendMode: "normal",
+                      opacity: 0.95,
+                      filter: "contrast(1.08) brightness(1.02) saturate(1.05)",
                       userSelect: "none",
                     }}
                   />
 
-                  {/* Light ink absorption layer */}
+                  {/* Fabric Integration Layer - Subtle Blending */}
+                  <img
+                    src={design}
+                    alt="Fabric integration layer"
+                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
+                    draggable={false}
+                    style={{
+                      objectFit: "contain",
+                      mixBlendMode: "multiply",
+                      opacity: 0.15,
+                      filter: "blur(0.3px)",
+                      userSelect: "none",
+                    }}
+                  />
+
+                  {/* Realistic Ink Absorption Effect */}
                   <img
                     src={design}
                     alt="Ink absorption layer"
@@ -365,15 +276,28 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                     draggable={false}
                     style={{
                       objectFit: "contain",
-                      mixBlendMode: "soft-light", // soft diffusion into fabric
-                      opacity: 0.65,
-                      filter: "blur(0.4px)",
+                      mixBlendMode: "overlay",
+                      opacity: 0.25,
+                      filter: "blur(0.2px) brightness(0.95)",
                       userSelect: "none",
                     }}
                   />
 
-                  {/* Fabric texture for woven feel */}
-                  <div className="absolute inset-0 pointer-events-none mix-blend-soft-light opacity-15 bg-[url('/textures/fabric.png')] bg-cover" />
+                  {/* Subtle Shadow for Depth */}
+                  <img
+                    src={design}
+                    alt="Shadow layer"
+                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
+                    draggable={false}
+                    style={{
+                      objectFit: "contain",
+                      mixBlendMode: "multiply",
+                      opacity: 0.08,
+                      filter: "blur(1px) brightness(0.3)",
+                      transform: "translate(1px, 1px)",
+                      userSelect: "none",
+                    }}
+                  />
 
                   {/* Rotation handle */}
                   <div
@@ -384,8 +308,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                 </div>
               </Rnd>
             )}
-          </>
-        )}
+        </>
       </div>
     </div>
   );
