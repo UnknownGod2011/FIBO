@@ -5,7 +5,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { enhancedCompositingEngine } from "./enhanced-compositing-engine.js";
+import { hyperRealisticCompositing } from "./hyper-realistic-compositing.js";
 
 // Load environment variables
 const __filename = fileURLToPath(import.meta.url);
@@ -137,9 +137,22 @@ class BackgroundContextManager {
   isBackgroundOperation(operation) {
     if (typeof operation === 'string') {
       const lowerOp = operation.toLowerCase();
-      return lowerOp.includes('background') && 
-             (lowerOp.includes('change') || lowerOp.includes('add') || 
-              lowerOp.includes('set') || lowerOp.includes('make'));
+      
+      // Enhanced background detection with typo tolerance and more patterns
+      const hasBackgroundKeyword = /background|backrgound|backround|bakground|backgrond/i.test(lowerOp);
+      const hasBackgroundAction = /change|add|set|make|put|place|give|create|apply|use/i.test(lowerOp);
+      
+      // Additional patterns for background operations
+      const backgroundPatterns = [
+        /(?:change|set|make)\s+(?:the\s+)?background/i,
+        /(?:add|put|place)\s+(?:a\s+)?.*background/i,
+        /background\s+(?:to|of|with)/i,
+        /(?:forest|beach|city|mountain|sky|ocean|desert|snow|rain|sunset|sunrise|night|day)\s+background/i,
+        /(?:put|place)\s+(?:in|on)\s+(?:a\s+)?(?:forest|beach|city|mountain|sky|ocean|desert|snow|rain)/i
+      ];
+      
+      return (hasBackgroundKeyword && hasBackgroundAction) || 
+             backgroundPatterns.some(pattern => pattern.test(operation));
     }
     
     if (operation && operation.type) {
@@ -323,8 +336,85 @@ class BackgroundContextManager {
    * Get current background state for refinement chain (Requirements 4.1, 4.2, 4.3)
    */
   getCurrentBackgroundState(imageUrl) {
-    const chainState = this.refinementChains.get(imageUrl);
+    console.log(`🔍 DEBUG: getCurrentBackgroundState called for: ${imageUrl}`);
+    console.log(`🔍 DEBUG: Available chains: ${Array.from(this.refinementChains.keys()).length}`);
+    
+    let chainState = this.refinementChains.get(imageUrl);
+    
+    // CRITICAL FIX: Try alternative URL patterns if not found
     if (!chainState) {
+      console.log(`🔍 DEBUG: Direct lookup failed, trying alternative patterns...`);
+      
+      // Try to find by partial URL match
+      for (const [url, chain] of this.refinementChains.entries()) {
+        // Check if URLs are related (same base, different query params)
+        const baseUrl1 = imageUrl.split('?')[0];
+        const baseUrl2 = url.split('?')[0];
+        
+        if (baseUrl1 === baseUrl2) {
+          chainState = chain;
+          console.log(`🔍 DEBUG: Found chain by base URL match: ${url}`);
+          // Copy to exact URL for future lookups
+          this.refinementChains.set(imageUrl, chainState);
+          break;
+        }
+        
+        // Check if one URL contains the other (localhost vs API URL)
+        if (imageUrl.includes('localhost') && url.includes('cloudfront')) {
+          // Extract the resource ID from both URLs
+          const localId = imageUrl.match(/refined_(\d+)\.png/)?.[1];
+          const apiId = url.match(/([a-f0-9]{32})/)?.[1];
+          
+          if (localId || apiId) {
+            chainState = chain;
+            console.log(`🔍 DEBUG: Found chain by resource ID match: ${url}`);
+            this.refinementChains.set(imageUrl, chainState);
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!chainState) {
+      console.log(`⚠️  No refinement chain found for ${imageUrl}`);
+      console.log(`🔍 DEBUG: Available chain URLs:`);
+      for (const [url, chain] of this.refinementChains.entries()) {
+        console.log(`   - ${url} (${chain.backgroundState.type}: "${chain.backgroundState.description}")`);
+      }
+      
+      // CRITICAL FIX: Try to inherit from the most recent chain with explicit background
+      let mostRecentExplicitChain = null;
+      let mostRecentTime = 0;
+      
+      for (const [url, chain] of this.refinementChains.entries()) {
+        if (chain.backgroundState.isExplicitlySet && 
+            chain.backgroundState.description !== 'transparent background' &&
+            chain.lastModified.getTime() > mostRecentTime) {
+          mostRecentExplicitChain = chain;
+          mostRecentTime = chain.lastModified.getTime();
+        }
+      }
+      
+      if (mostRecentExplicitChain) {
+        console.log(`🔄 DEBUG: Inheriting background from most recent explicit chain: "${mostRecentExplicitChain.backgroundState.description}"`);
+        
+        // Create new chain with inherited background
+        const inheritedChain = {
+          originalImageUrl: imageUrl,
+          backgroundState: {
+            ...mostRecentExplicitChain.backgroundState,
+            type: 'inherited',
+            setAt: new Date()
+          },
+          refinementHistory: [],
+          lastModified: new Date(),
+          chainId: `inherited_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        };
+        
+        this.refinementChains.set(imageUrl, inheritedChain);
+        return inheritedChain.backgroundState;
+      }
+      
       // Return default transparent background (Requirements 4.3)
       return {
         type: 'default',
@@ -335,6 +425,7 @@ class BackgroundContextManager {
       };
     }
     
+    console.log(`✅ Found chain state: ${chainState.backgroundState.type} - "${chainState.backgroundState.description}"`);
     return chainState.backgroundState;
   }
 
@@ -715,15 +806,57 @@ app.post("/api/refine", async (req, res) => {
     // CRITICAL: Retrieve original generation data
     let originalData = generationCache.get(imageUrl);
     
-    // Initialize or retrieve refinement chain for background persistence (Requirements 4.1, 4.2, 4.3)
-    const refinementChain = backgroundContextManager.initializeRefinementChain(imageUrl, originalData);
-    
     if (!originalData) {
       for (const [key, data] of generationCache.entries()) {
         if (data.local_url === imageUrl || data.image_url === imageUrl) {
           originalData = data;
           break;
         }
+      }
+    }
+    
+    // Initialize or retrieve refinement chain for background persistence (Requirements 4.1, 4.2, 4.3)
+    const refinementChain = backgroundContextManager.initializeRefinementChain(imageUrl, originalData);
+    
+    // CRITICAL FIX: Enhanced URL mapping and chain synchronization
+    let apiImageUrl = imageUrl;
+    if (originalData && originalData.image_url && imageUrl.includes('localhost')) {
+      apiImageUrl = originalData.image_url;
+      console.log(`🔄 Using original Bria URL for API call: ${apiImageUrl}`);
+      
+      // CRITICAL FIX: Initialize refinement chain for API URL with proper state transfer
+      const localChain = backgroundContextManager.refinementChains.get(imageUrl);
+      
+      if (localChain) {
+        // Copy the entire chain state to API URL
+        backgroundContextManager.refinementChains.set(apiImageUrl, {
+          ...localChain,
+          originalImageUrl: apiImageUrl, // Update to API URL
+          chainId: `api_${localChain.chainId}` // Distinguish API chain
+        });
+        console.log(`🔗 Copied chain state: ${imageUrl} → ${apiImageUrl}`);
+        console.log(`🔗 Chain state: ${localChain.backgroundState.type} - "${localChain.backgroundState.description}"`);
+      } else {
+        // Initialize new chain for API URL with original data
+        backgroundContextManager.initializeRefinementChain(apiImageUrl, originalData);
+        console.log(`🔗 Initialized new chain for API URL: ${apiImageUrl}`);
+      }
+      
+      // CRITICAL FIX: Also ensure reverse mapping (API URL → local URL)
+      const apiChain = backgroundContextManager.refinementChains.get(apiImageUrl);
+      if (apiChain && !backgroundContextManager.refinementChains.has(imageUrl)) {
+        backgroundContextManager.refinementChains.set(imageUrl, {
+          ...apiChain,
+          originalImageUrl: imageUrl,
+          chainId: `local_${apiChain.chainId}`
+        });
+        console.log(`🔗 Created reverse mapping: ${apiImageUrl} → ${imageUrl}`);
+      }
+    } else {
+      // For non-localhost URLs, ensure chain exists
+      if (!backgroundContextManager.refinementChains.has(imageUrl)) {
+        backgroundContextManager.initializeRefinementChain(imageUrl, originalData);
+        console.log(`🔗 Initialized chain for direct URL: ${imageUrl}`);
       }
     }
     
@@ -736,12 +869,6 @@ app.post("/api/refine", async (req, res) => {
       console.log(`   - Structured prompt: ${originalData.structured_prompt ? 'Available' : 'Not available'}`);
     }
 
-    // Use original Bria URL for API calls
-    let apiImageUrl = imageUrl;
-    if (originalData && originalData.image_url && imageUrl.includes('localhost')) {
-      apiImageUrl = originalData.image_url;
-      console.log(`🔄 Using original Bria URL for API call: ${apiImageUrl}`);
-    }
 
     // Enhanced background operation analysis with refinement chain management (Requirements 2.1, 2.2, 2.4, 4.1, 4.2, 4.4, 4.5)
     const isBackgroundOperation = backgroundContextManager.isBackgroundOperation(instruction);
@@ -879,7 +1006,13 @@ async function analyzeRefinementInstructionEnhanced(instruction, originalData, b
     /,\s*(?=add|change|make|turn|give|put|place|remove)/i,
     /;\s*(?=add|change|make|turn|give|put|place|remove)/i,
     /(?:add|change|make|turn|give|put|place|remove)\s+[^,]+.*(?:add|change|make|turn|give|put|place|remove)/i,
-    /(?:add|change|make|turn|give|put|place|remove)\s+[^,]+\s+(?:and\s+)?(?:also\s+)?(?:then\s+)?(?:add|change|make|turn|give|put|place|remove)/i
+    /(?:add|change|make|turn|give|put|place|remove)\s+[^,]+\s+(?:and\s+)?(?:also\s+)?(?:then\s+)?(?:add|change|make|turn|give|put|place|remove)/i,
+    // CRITICAL FIX: Specific patterns for mixed background + object operations
+    /(?:add|put|place)\s+.+\s+and\s+(?:change|set|make)\s+.+background/i,
+    /(?:change|set|make)\s+.+background.+\s+and\s+(?:add|put|place)/i,
+    // CRITICAL FIX: Pattern for "make X and add Y background" format
+    /(?:make|turn|change)\s+.+\s+and\s+(?:add|put|place)\s+.+background/i,
+    /(?:add|put|place)\s+.+background\s+and\s+(?:make|turn|change)/i
   ];
   
   const hasMultipleEdits = multiEditPatterns.some(pattern => pattern.test(instruction));
@@ -919,6 +1052,28 @@ async function analyzeRefinementInstructionEnhanced(instruction, originalData, b
       }],
       backgroundOperation: true,
       contextIsolated: true
+    };
+  }
+  
+  // PRIORITY A FIX: Check for single object-specific operations before falling back
+  console.log(`🔍 DEBUG: Checking for single object-specific operations: "${instruction}"`);
+  const singleOperation = parseIndividualOperationWithValidation(instruction);
+  console.log(`🔍 DEBUG: parseIndividualOperationWithValidation returned:`, singleOperation);
+  
+  if (singleOperation && singleOperation.isValid && singleOperation.type !== 'general_edit') {
+    console.log(`🎯 CRITICAL BUG FIX: Single object-specific operation detected: ${singleOperation.type}`);
+    return {
+      strategy: 'multi_step', // Use multi_step for consistency with object-specific targeting
+      operations: [singleOperation],
+      originalOperationCount: 1,
+      conflictsResolved: false,
+      singleOperation: true,
+      backgroundPreservation: {
+        shouldPreserve: backgroundContext && backgroundContext.background && backgroundContext.isExplicitlySet,
+        currentBackground: backgroundContext ? backgroundContext.background : null,
+        preventThemeInference: true,
+        contextIsolated: true
+      }
     };
   }
   
@@ -987,17 +1142,87 @@ async function analyzeRefinementInstruction(instruction, originalData) {
     const match = instruction.match(/^add\s+(.+)$/i);
     if (match) {
       const itemsString = match[1];
-      // Split on commas and final "and"
-      const items = itemsString.split(/,\s*(?:and\s+)?/i)
-        .map(item => item.trim())
-        .filter(item => item.length > 0);
+      // CRITICAL FIX: Enhanced splitting for "a hat, cigar and a snake"
+      let items = [];
       
-      // Handle the final "and" case
-      if (items.length > 0) {
-        const lastItem = items[items.length - 1];
-        const andMatch = lastItem.match(/^and\s+(.+)$/i);
-        if (andMatch) {
-          items[items.length - 1] = andMatch[1].trim();
+      console.log(`🔍 COMMA LIST DEBUG: Original itemsString: "${itemsString}"`);
+      
+      // Strategy 1: Split on commas first, then handle "and" in the last part
+      const commaParts = itemsString.split(',').map(part => part.trim());
+      console.log(`🔍 COMMA LIST DEBUG: After comma split: [${commaParts.map(p => `"${p}"`).join(', ')}]`);
+      
+      for (let i = 0; i < commaParts.length; i++) {
+        const part = commaParts[i];
+        console.log(`🔍 COMMA LIST DEBUG: Processing part ${i + 1}: "${part}"`);
+        
+        if (i === commaParts.length - 1) {
+          // Last part - check for "and" to split further
+          if (part.includes(' and ')) {
+            console.log(`🔍 COMMA LIST DEBUG: Found "and" in last part, splitting further`);
+            const andParts = part.split(/\s+and\s+/i).map(p => p.trim());
+            console.log(`🔍 COMMA LIST DEBUG: And parts: [${andParts.map(p => `"${p}"`).join(', ')}]`);
+            
+            // Add each "and" part separately
+            for (const andPart of andParts) {
+              const cleanPart = andPart.replace(/^and\s+/i, '').trim();
+              if (cleanPart) {
+                items.push(cleanPart);
+                console.log(`🔍 COMMA LIST DEBUG: Added and part: "${cleanPart}"`);
+              }
+            }
+          } else {
+            // Remove leading "and" if present
+            const cleanPart = part.replace(/^and\s+/i, '').trim();
+            if (cleanPart) {
+              items.push(cleanPart);
+              console.log(`🔍 COMMA LIST DEBUG: Added last part: "${cleanPart}"`);
+            }
+          }
+        } else {
+          // Not the last part - add as is
+          items.push(part);
+          console.log(`🔍 COMMA LIST DEBUG: Added regular part: "${part}"`);
+        }
+      }
+      
+      // Filter out empty items
+      items = items.filter(item => item.length > 0);
+      console.log(`🔍 COMMA LIST DEBUG: Final items: [${items.map(p => `"${p}"`).join(', ')}] (${items.length} total)`);
+      
+      // CRITICAL FIX: If we still only have 2 items but the original had "and", try alternative splitting
+      if (items.length === 2 && itemsString.includes(' and ')) {
+        console.log(`🔍 COMMA LIST DEBUG: Only 2 items found, trying alternative splitting`);
+        
+        // Strategy 1: Try splitting on both commas and "and" simultaneously
+        const alternativeItems = itemsString
+          .split(/,\s*|\s+and\s+/i)
+          .map(item => item.trim())
+          .filter(item => item.length > 0 && item !== 'and');
+        
+        console.log(`🔍 COMMA LIST DEBUG: Alternative split: [${alternativeItems.map(p => `"${p}"`).join(', ')}] (${alternativeItems.length} total)`);
+        
+        if (alternativeItems.length > items.length) {
+          items = alternativeItems;
+          console.log(`🔍 COMMA LIST DEBUG: Using alternative split with ${items.length} items`);
+        }
+        
+        // Strategy 2: If still only 2 items, try more aggressive splitting
+        if (items.length === 2) {
+          console.log(`🔍 COMMA LIST DEBUG: Still only 2 items, trying aggressive splitting`);
+          
+          // Look for patterns like "X and Y around it" and split into "X" and "Y around it"
+          const lastItem = items[items.length - 1];
+          const aggressiveMatch = lastItem.match(/^(.+?)\s+and\s+(.+)$/i);
+          
+          if (aggressiveMatch) {
+            console.log(`🔍 COMMA LIST DEBUG: Found "and" pattern in last item: "${lastItem}"`);
+            
+            // Replace the last item with the two split parts
+            items[items.length - 1] = aggressiveMatch[1].trim();
+            items.push(aggressiveMatch[2].trim());
+            
+            console.log(`🔍 COMMA LIST DEBUG: Aggressive split result: [${items.map(p => `"${p}"`).join(', ')}] (${items.length} total)`);
+          }
         }
       }
       
@@ -1029,10 +1254,14 @@ async function analyzeRefinementInstruction(instruction, originalData) {
     }
   }
   
-  // CRITICAL FIX: Handle simple "add X and Y" pattern (no commas)
+  // CRITICAL FIX: Handle simple "add X and Y" pattern (no commas) - BUT ONLY if it's not a mixed operation
   const isAddAndPattern = !hasCommas && /^add\s+.+\s+and\s+.+$/i.test(instruction);
   
-  if (isAddAndPattern) {
+  // CRITICAL FIX: Check if this is actually a mixed operation first
+  const isMixedOperation = /^add\s+.+\s+and\s+(change|make|turn|set)\s+/i.test(instruction) ||
+                          /^add\s+.+\s+and\s+.+\s+background/i.test(instruction);
+  
+  if (isAddAndPattern && !isMixedOperation) {
     console.log('🎯 CRITICAL FIX: "add X and Y" simple pattern detected - forcing multi-step');
     const match = instruction.match(/^add\s+(.+?)\s+and\s+(.+)$/i);
     if (match) {
@@ -1168,6 +1397,342 @@ function parseMultipleOperationsEnhanced(instruction) {
   
   console.log(`🔍 FIXED Enhanced parsing of multi-edit instruction: "${instruction}"`);
   
+  // CRITICAL FIX: Process "add X and change Y color to Z" patterns FIRST
+  // NEW PATTERN: "add X and change the Y color to Z" (object addition + object modification)
+  const addPlusColorPattern = /^(add|put|place)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|make|turn)\s+(?:the\s+)?(.+?)\s+color\s+(?:to\s+)?(\w+)$/i;
+  const addPlusColorMatch = instruction.match(addPlusColorPattern);
+  
+  if (addPlusColorMatch) {
+    console.log(`   - 🎯 PRIORITY FIX: Add + color change pattern detected`);
+    
+    const additionOp = {
+      type: 'object_addition',
+      instruction: `${addPlusColorMatch[1]} ${addPlusColorMatch[2]}`,
+      target: extractObjectFromPhrase(addPlusColorMatch[2]),
+      object: addPlusColorMatch[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    // Clean up target (remove possessive 's if present)
+    const colorTarget = addPlusColorMatch[4].trim().replace(/'s$/, '');
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${addPlusColorMatch[3]} ${colorTarget} color ${addPlusColorMatch[5]}`,
+      target: colorTarget,
+      value: addPlusColorMatch[5].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(additionOp);
+    operations.push(colorOp);
+    
+    console.log(`   - ✅ PRIORITY FIX: Created addition operation: "${additionOp.instruction}" (target: ${additionOp.target})`);
+    console.log(`   - ✅ PRIORITY FIX: Created color operation: "${colorOp.instruction}" (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`✅ PRIORITY FIX: Add + color change pattern extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ADDITIONAL PATTERN: "add X and make Y Z" (object addition + object modification)
+  const addPlusMakePattern = /^(add|put|place)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(make|turn)\s+(?:the\s+)?(.+?)\s+(\w+)$/i;
+  const addPlusMakeMatch = instruction.match(addPlusMakePattern);
+  
+  if (addPlusMakeMatch) {
+    console.log(`   - 🎯 PRIORITY FIX: Add + make pattern detected`);
+    
+    const additionOp = {
+      type: 'object_addition',
+      instruction: `${addPlusMakeMatch[1]} ${addPlusMakeMatch[2]}`,
+      target: extractObjectFromPhrase(addPlusMakeMatch[2]),
+      object: addPlusMakeMatch[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${addPlusMakeMatch[3]} ${addPlusMakeMatch[4]} ${addPlusMakeMatch[5]}`,
+      target: addPlusMakeMatch[4].trim(),
+      value: addPlusMakeMatch[5].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(additionOp);
+    operations.push(colorOp);
+    
+    console.log(`   - ✅ PRIORITY FIX: Created addition operation: "${additionOp.instruction}" (target: ${additionOp.target})`);
+    console.log(`   - ✅ PRIORITY FIX: Created color operation: "${colorOp.instruction}" (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`✅ PRIORITY FIX: Add + make pattern extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // CRITICAL FIX: Detect "background" and "and" together for mixed operations
+  const hasBackground = /background|backrgound|backround|bakground|backgrond/i.test(instruction);
+  const hasAnd = /\s+and\s+/i.test(instruction);
+  
+  if (hasBackground && hasAnd) {
+    console.log(`   - 🎯 BACKGROUND + AND detected: Mixed background operation`);
+    
+    // Split on "and" and process each part
+    const parts = instruction.split(/\s+and\s+/i);
+    if (parts.length === 2) {
+      console.log(`   - Split into: "${parts[0].trim()}" AND "${parts[1].trim()}"`);
+      
+      // Check which part is the background operation
+      const part1IsBackground = backgroundContextManager.isBackgroundOperation(parts[0].trim()) || 
+                               /backrgound|backround|bakground|backgrond/i.test(parts[0]);
+      const part2IsBackground = backgroundContextManager.isBackgroundOperation(parts[1].trim()) || 
+                               /backrgound|backround|bakground|backgrond/i.test(parts[1]);
+      
+      if (part1IsBackground || part2IsBackground) {
+        const backgroundPart = part1IsBackground ? parts[0].trim() : parts[1].trim();
+        const objectPart = part1IsBackground ? parts[1].trim() : parts[0].trim();
+        
+        console.log(`   - Background part: "${backgroundPart}"`);
+        console.log(`   - Object part: "${objectPart}"`);
+        
+        // Create background operation
+        const backgroundOp = {
+          type: 'background_edit',
+          instruction: backgroundPart,
+          target: 'background',
+          value: backgroundContextManager.extractBackgroundDescriptionEnhanced(backgroundPart),
+          action: 'modify',
+          priority: 1,
+          isValid: true,
+          confidence: 0.9
+        };
+        
+        // Create object operation
+        const objectOp = {
+          type: 'object_addition',
+          instruction: objectPart,
+          target: extractObjectFromPhrase(objectPart.replace(/^(add|put|place)\s+/i, '')),
+          object: objectPart.replace(/^(add|put|place)\s+/i, '').trim(),
+          action: 'add',
+          priority: 2,
+          isValid: true,
+          confidence: 0.9
+        };
+        
+        operations.push(backgroundOp);
+        operations.push(objectOp);
+        
+        console.log(`   - ✅ BACKGROUND + AND: Created background operation (value: ${backgroundOp.value})`);
+        console.log(`   - ✅ BACKGROUND + AND: Created object operation (target: ${objectOp.target})`);
+        console.log(`✅ BACKGROUND + AND: Mixed operation extracted ${operations.length} operations`);
+        return operations;
+      }
+    }
+  }
+  
+  // REMAINING ISSUES FIX: Add patterns for color + background combinations
+  
+  // ISSUE 1 FIX: Pattern for "change the hat's color to green and add a background"
+  const colorPlusBackgroundPattern1 = /^(change|make|turn)\s+(?:the\s+)?(.+?)'s\s+color\s+to\s+(\w+)\s+and\s+add\s+(?:a\s+)?background$/i;
+  const colorPlusBackgroundMatch1 = instruction.match(colorPlusBackgroundPattern1);
+  
+  if (colorPlusBackgroundMatch1) {
+    console.log(`   - 🎯 ISSUE 1 FIX: Color + background pattern 1 detected`);
+    
+    // CRITICAL FIX: Remove possessive 's from target
+    const cleanTarget = colorPlusBackgroundMatch1[2].trim().replace(/'s$/, '');
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${colorPlusBackgroundMatch1[1]} ${cleanTarget} color ${colorPlusBackgroundMatch1[3]}`,
+      target: cleanTarget,
+      value: colorPlusBackgroundMatch1[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `add background`,
+      target: 'background',
+      value: 'custom background',
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(colorOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ ISSUE 1 FIX: Created color operation (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`   - ✅ ISSUE 1 FIX: Created background operation (value: ${backgroundOp.value})`);
+    console.log(`✅ ISSUE 1 FIX: Color + background pattern 1 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ISSUE 1 FIX: Pattern for "make the shirt blue and add forest background"
+  const colorPlusBackgroundPattern2 = /^(make|turn|change)\s+(?:the\s+)?(.+?)\s+(\w+)\s+and\s+add\s+(.+)\s+background$/i;
+  const colorPlusBackgroundMatch2 = instruction.match(colorPlusBackgroundPattern2);
+  
+  if (colorPlusBackgroundMatch2) {
+    console.log(`   - 🎯 ISSUE 1 FIX: Color + background pattern 2 detected`);
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${colorPlusBackgroundMatch2[1]} ${colorPlusBackgroundMatch2[2]} ${colorPlusBackgroundMatch2[3]}`,
+      target: colorPlusBackgroundMatch2[2].trim(),
+      value: colorPlusBackgroundMatch2[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `add ${colorPlusBackgroundMatch2[4]} background`,
+      target: 'background',
+      value: colorPlusBackgroundMatch2[4].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(colorOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ ISSUE 1 FIX: Created color operation (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`   - ✅ ISSUE 1 FIX: Created background operation (value: ${backgroundOp.value})`);
+    console.log(`✅ ISSUE 1 FIX: Color + background pattern 2 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ISSUE 3 FIX: Pattern for "change the hat color to red and add headphones"
+  const colorPlusAdditionPattern1 = /^(change|make|turn)\s+(?:the\s+)?(.+?)\s+color\s+to\s+(\w+)\s+and\s+add\s+(?:a\s+|an\s+)?(.+)$/i;
+  const colorPlusAdditionMatch1 = instruction.match(colorPlusAdditionPattern1);
+  
+  if (colorPlusAdditionMatch1) {
+    console.log(`   - 🎯 ISSUE 3 FIX: Color + addition pattern 1 detected`);
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${colorPlusAdditionMatch1[1]} ${colorPlusAdditionMatch1[2]} color ${colorPlusAdditionMatch1[3]}`,
+      target: colorPlusAdditionMatch1[2].trim(),
+      value: colorPlusAdditionMatch1[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const additionOp = {
+      type: 'object_addition',
+      instruction: `add ${colorPlusAdditionMatch1[4]}`,
+      target: extractObjectFromPhrase(colorPlusAdditionMatch1[4].trim()),
+      object: colorPlusAdditionMatch1[4].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(colorOp);
+    operations.push(additionOp);
+    
+    console.log(`   - ✅ ISSUE 3 FIX: Created color operation (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`   - ✅ ISSUE 3 FIX: Created addition operation (target: ${additionOp.target})`);
+    console.log(`✅ ISSUE 3 FIX: Color + addition pattern 1 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ISSUE 3 FIX: Pattern for "make eyes blue and add a cigar" (but NOT background)
+  const colorPlusAdditionPattern2 = /^(make|turn)\s+(?:the\s+)?(.+?)\s+(\w+)\s+and\s+add\s+(?:a\s+|an\s+)?(.+)$/i;
+  const colorPlusAdditionMatch2 = instruction.match(colorPlusAdditionPattern2);
+  
+  // CRITICAL FIX: Check if the addition part is actually a background
+  if (colorPlusAdditionMatch2 && !colorPlusAdditionMatch2[4].includes('background')) {
+    console.log(`   - 🎯 ISSUE 3 FIX: Color + addition pattern 2 detected`);
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${colorPlusAdditionMatch2[1]} ${colorPlusAdditionMatch2[2]} ${colorPlusAdditionMatch2[3]}`,
+      target: colorPlusAdditionMatch2[2].trim(),
+      value: colorPlusAdditionMatch2[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const additionOp = {
+      type: 'object_addition',
+      instruction: `add ${colorPlusAdditionMatch2[4]}`,
+      target: extractObjectFromPhrase(colorPlusAdditionMatch2[4].trim()),
+      object: colorPlusAdditionMatch2[4].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(colorOp);
+    operations.push(additionOp);
+    
+    console.log(`   - ✅ ISSUE 3 FIX: Created color operation (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`   - ✅ ISSUE 3 FIX: Created addition operation (target: ${additionOp.target})`);
+    console.log(`✅ ISSUE 3 FIX: Color + addition pattern 2 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ISSUE 1 FIX: Handle "make the shirt blue and add forest background" specifically
+  if (colorPlusAdditionMatch2 && colorPlusAdditionMatch2[4].includes('background')) {
+    console.log(`   - 🎯 ISSUE 1 FIX: Color + background pattern 3 detected (via addition pattern)`);
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `${colorPlusAdditionMatch2[1]} ${colorPlusAdditionMatch2[2]} ${colorPlusAdditionMatch2[3]}`,
+      target: colorPlusAdditionMatch2[2].trim(),
+      value: colorPlusAdditionMatch2[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    // Extract background type from "forest background"
+    const backgroundValue = colorPlusAdditionMatch2[4].replace(/\s+background$/, '').trim();
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `add ${colorPlusAdditionMatch2[4]}`,
+      target: 'background',
+      value: backgroundValue,
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(colorOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ ISSUE 1 FIX: Created color operation (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`   - ✅ ISSUE 1 FIX: Created background operation (value: ${backgroundOp.value})`);
+    console.log(`✅ ISSUE 1 FIX: Color + background pattern 3 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
   // CRITICAL FIX: Check mixed patterns FIRST before simple "add X and Y" pattern
   // This prevents mixed operations from being incorrectly parsed as simple additions
   
@@ -1206,6 +1771,82 @@ function parseMultipleOperationsEnhanced(instruction) {
     console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
     console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
     console.log(`✅ CRITICAL FIX: Mixed operation pattern 1 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // CRITICAL FIX: Pattern for "change background to X and add Y" (reverse order)
+  const mixedPatternReverse = /^(change|set)\s+(?:the\s+)?background\s+to\s+(.+?)\s+and\s+(add|put|place)\s+(?:a\s+|an\s+)?(.+)$/i;
+  const mixedMatchReverse = instruction.match(mixedPatternReverse);
+  
+  if (mixedMatchReverse) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern (background + object) detected`);
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${mixedMatchReverse[1]} background ${mixedMatchReverse[2]}`,
+      target: 'background',
+      value: mixedMatchReverse[2].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatchReverse[3]} ${mixedMatchReverse[4]}`,
+      target: extractObjectFromPhrase(mixedMatchReverse[4]),
+      object: mixedMatchReverse[4].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(backgroundOp);
+    operations.push(objectOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern (background + object) extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // ENHANCED FIX: Pattern for "add X and add Y background" format
+  const addPlusAddBackgroundPattern = /^(add|put|place)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(add|put|place)\s+(?:a\s+|an\s+)?(.+?)\s+background$/i;
+  const addPlusAddBackgroundMatch = instruction.match(addPlusAddBackgroundPattern);
+  
+  if (addPlusAddBackgroundMatch) {
+    console.log(`   - 🎯 ENHANCED FIX: Add + add background pattern detected`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${addPlusAddBackgroundMatch[1]} ${addPlusAddBackgroundMatch[2]}`,
+      target: extractObjectFromPhrase(addPlusAddBackgroundMatch[2]),
+      object: addPlusAddBackgroundMatch[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${addPlusAddBackgroundMatch[3]} ${addPlusAddBackgroundMatch[4]} background`,
+      target: 'background',
+      value: addPlusAddBackgroundMatch[4].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ ENHANCED FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ ENHANCED FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`✅ ENHANCED FIX: Add + add background pattern extracted ${operations.length} operations`);
     return operations;
   }
   
@@ -1296,21 +1937,21 @@ function parseMultipleOperationsEnhanced(instruction) {
     }
   }
   
-  // CRITICAL FIX: Handle mixed operations (object + background) before general case
-  console.log(`   - 🔍 Checking for mixed operations in: "${instruction}"`);
+  // CRITICAL BUG FIX: Handle complex multi-edit patterns first
+  console.log(`   - 🔍 Checking for complex multi-operations in: "${instruction}"`);
   
-  // Pattern 1: "add X and change background to Y"
-  const mixedPattern1 = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|make|set)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)$/i;
-  const mixedMatch1 = instruction.match(mixedPattern1);
+  // PRIORITY B FIX: Pattern for 3+ operations like "add scarf and change background to white and make scarf striped"
+  const threeOpPattern = /^(add|put|place)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|set)\s+background\s+to\s+(.+?)\s+and\s+(make|turn|change)\s+(?:the\s+)?(.+?)\s+(\w+)$/i;
+  const threeOpMatch = instruction.match(threeOpPattern);
   
-  if (mixedMatch1) {
-    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 1 detected (object + background)`);
+  if (threeOpMatch) {
+    console.log(`   - 🎯 CRITICAL BUG FIX: Three operation pattern detected (add + background + modify)`);
     
-    const objectOp = {
+    const addOp = {
       type: 'object_addition',
-      instruction: `${mixedMatch1[1]} ${mixedMatch1[2]}`,
-      target: extractObjectFromPhrase(mixedMatch1[2]),
-      object: mixedMatch1[2].trim(),
+      instruction: `${threeOpMatch[1]} ${threeOpMatch[2]}`,
+      target: extractObjectFromPhrase(threeOpMatch[2]),
+      object: threeOpMatch[2].trim(),
       action: 'add',
       priority: 2,
       isValid: true,
@@ -1319,9 +1960,139 @@ function parseMultipleOperationsEnhanced(instruction) {
     
     const backgroundOp = {
       type: 'background_edit',
-      instruction: `${mixedMatch1[3]} background ${mixedMatch1[4]}`,
+      instruction: `${threeOpMatch[3]} background ${threeOpMatch[4]}`,
       target: 'background',
-      value: mixedMatch1[4].trim(),
+      value: threeOpMatch[4].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const modifyOp = {
+      type: 'object_modification',
+      instruction: `${threeOpMatch[5]} ${threeOpMatch[6]} ${threeOpMatch[7]}`,
+      target: threeOpMatch[6].trim(),
+      value: threeOpMatch[7].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(addOp);
+    operations.push(backgroundOp);
+    operations.push(modifyOp);
+    
+    console.log(`   - ✅ CRITICAL BUG FIX: Created add operation: "${addOp.instruction}" (target: ${addOp.target})`);
+    console.log(`   - ✅ CRITICAL BUG FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`   - ✅ CRITICAL BUG FIX: Created modify operation: "${modifyOp.instruction}" (target: ${modifyOp.target}, value: ${modifyOp.value})`);
+    console.log(`✅ CRITICAL BUG FIX: Three operation pattern extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // PRIORITY B FIX: Pattern for background + other operations like "change background to studio and increase brightness"
+  const backgroundPlusPattern = /^(change|set)\s+background\s+to\s+(.+?)\s+and\s+(increase|decrease|adjust|make|turn|change)\s+(.+)$/i;
+  const backgroundPlusMatch = instruction.match(backgroundPlusPattern);
+  
+  if (backgroundPlusMatch) {
+    console.log(`   - 🎯 CRITICAL BUG FIX: Background + operation pattern detected`);
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${backgroundPlusMatch[1]} background ${backgroundPlusMatch[2]}`,
+      target: 'background',
+      value: backgroundPlusMatch[2].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const otherOp = {
+      type: 'general_edit',
+      instruction: `${backgroundPlusMatch[3]} ${backgroundPlusMatch[4]}`,
+      target: backgroundPlusMatch[4].trim(),
+      value: backgroundPlusMatch[3].trim(),
+      action: 'modify',
+      priority: 4,
+      isValid: true,
+      confidence: 0.8
+    };
+    
+    operations.push(backgroundOp);
+    operations.push(otherOp);
+    
+    console.log(`   - ✅ CRITICAL BUG FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`   - ✅ CRITICAL BUG FIX: Created other operation: "${otherOp.instruction}" (target: ${otherOp.target})`);
+    console.log(`✅ CRITICAL BUG FIX: Background + operation pattern extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // PRIORITY A FIX: Pattern for multiple color changes like "make the hat orange and the shirt green"
+  const multiColorPattern = /^(make|turn|change)\s+(?:the\s+)?(.+?)\s+(\w+)\s+and\s+(?:the\s+)?(.+?)\s+(\w+)$/i;
+  const multiColorMatch = instruction.match(multiColorPattern);
+  
+  if (multiColorMatch) {
+    console.log(`   - 🎯 CRITICAL BUG FIX: Multiple color change pattern detected`);
+    
+    const color1Op = {
+      type: 'object_modification',
+      instruction: `${multiColorMatch[1]} ${multiColorMatch[2]} ${multiColorMatch[3]}`,
+      target: multiColorMatch[2].trim(),
+      value: multiColorMatch[3].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const color2Op = {
+      type: 'object_modification',
+      instruction: `${multiColorMatch[1]} ${multiColorMatch[4]} ${multiColorMatch[5]}`,
+      target: multiColorMatch[4].trim(),
+      value: multiColorMatch[5].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(color1Op);
+    operations.push(color2Op);
+    
+    console.log(`   - ✅ CRITICAL BUG FIX: Created color operation 1: "${color1Op.instruction}" (target: ${color1Op.target}, value: ${color1Op.value})`);
+    console.log(`   - ✅ CRITICAL BUG FIX: Created color operation 2: "${color2Op.instruction}" (target: ${color2Op.target}, value: ${color2Op.value})`);
+    console.log(`✅ CRITICAL BUG FIX: Multiple color pattern extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // CRITICAL FIX: Handle mixed operations (object + background) before general case
+  console.log(`   - 🔍 Checking for mixed operations in: "${instruction}"`);
+  
+  // Pattern 1b: "add X and change background to Y" (second occurrence)
+  const mixedPattern1b = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|make|set)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)$/i;
+  const mixedMatch1b = instruction.match(mixedPattern1b);
+  
+  if (mixedMatch1b) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 1b detected (object + background)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch1b[1]} ${mixedMatch1b[2]}`,
+      target: extractObjectFromPhrase(mixedMatch1b[2]),
+      object: mixedMatch1b[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${mixedMatch1b[3]} background ${mixedMatch1b[4]}`,
+      target: 'background',
+      value: mixedMatch1b[4].trim(),
       action: 'modify',
       priority: 1,
       isValid: true,
@@ -1611,6 +2382,14 @@ function parseIndividualOperationWithValidation(instruction) {
   const backgroundPatterns = [
     /(?:make|change|set|give)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)/i,
     /(?:add|put)\s+(?:a\s+)?(.+)\s+background/i,
+    
+    // CRITICAL FIX: Handle "add [environment] background" patterns
+    /(?:add|put|place)\s+(?:a\s+|an\s+)?(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day|studio|nature|outdoor|indoor)\s+background/i,
+    
+    // CRITICAL FIX: Handle background typos like "backrgound", "backround", etc.
+    /(?:make|change|set|give)\s+(?:the\s+)?(?:backrgound|backround|bakground|backgrond)\s+(?:to\s+)?(.+)/i,
+    /(?:add|put)\s+(?:a\s+)?(.+)\s+(?:backrgound|backround|bakground|backgrond)/i,
+    
     /(.+)\s+(?:falling\s+)?behind\s+(?:him|her|it|them)/i,
     /background\s+(?:of\s+|with\s+)?(.+)/i,
     
@@ -3034,7 +3813,8 @@ async function performMultiStepRefinementEnhanced(imageUrl, instruction, origina
       originalPrompt, 
       refinementPlan.operations, 
       instruction, 
-      backgroundContext
+      backgroundContext,
+      imageUrl  // PRIORITY C FIX: Pass imageUrl for background chain access
     );
     
     console.log("🎨 Generating image with combined multi-edit structured prompt and background context");
@@ -3061,11 +3841,12 @@ async function performMultiStepRefinementEnhanced(imageUrl, instruction, origina
     const updatedBackgroundState = backgroundContextManager.getCurrentBackgroundState(imageUrl);
     
     if (!hasBackgroundEdit) {
-      console.log("🔒 No background edits in multi-step - preserving background from refinement chain");
+      console.log("🔒 PRIORITY C FIX: No background edits in multi-step - preserving existing background");
       
-      // Preserve background based on refinement chain state (Requirements 4.1, 4.2)
+      // CRITICAL BUG FIX: Preserve background based on refinement chain state (Requirements 4.1, 4.2)
       if (updatedBackgroundState.type === 'default' || updatedBackgroundState.description === 'transparent background') {
-        // Maintain transparent background (Requirements 4.3)
+        // Only maintain transparent background if it was never explicitly set (Requirements 4.3)
+        console.log(`🔒 PRIORITY C FIX: Maintaining default transparent background`);
         const backgroundRemovalResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/remove_background`, {
           image: pollResult.imageUrl,
           sync: false
@@ -3079,9 +3860,29 @@ async function performMultiStepRefinementEnhanced(imageUrl, instruction, origina
         } else {
           console.warn(`⚠️  Multi-step background preservation failed: ${backgroundRemovalResult.error?.message}`);
         }
-      } else if (updatedBackgroundState.isExplicitlySet && updatedBackgroundState.preserveAcrossRefinements) {
-        console.log(`🔒 Preserving explicit background: "${updatedBackgroundState.description}"`);
+      } else if (updatedBackgroundState.isExplicitlySet || updatedBackgroundState.type === 'explicit') {
+        // CRITICAL BUG FIX: Preserve non-default backgrounds across refinements
+        console.log(`🔒 PRIORITY C FIX: Preserving explicit background: "${updatedBackgroundState.description}"`);
+        console.log(`   - Background type: ${updatedBackgroundState.type}`);
+        console.log(`   - Explicitly set: ${updatedBackgroundState.isExplicitlySet}`);
+        console.log(`   - Should preserve: ${updatedBackgroundState.preserveAcrossRefinements}`);
+        
         // The background should already be preserved in the structured prompt modification
+        // No additional processing needed - the generated image should maintain the background
+        console.log(`✅ PRIORITY C FIX: Non-default background preserved in structured prompt`);
+      } else {
+        console.log(`⚠️  PRIORITY C FIX: Unknown background state, defaulting to transparent`);
+        // Fallback to transparent background
+        const backgroundRemovalResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/remove_background`, {
+          image: pollResult.imageUrl,
+          sync: false
+        });
+
+        if (backgroundRemovalResult.success) {
+          const bgRemovalPollResult = await pollBriaStatus(backgroundRemovalResult.data.request_id);
+          finalImageUrl = bgRemovalPollResult.imageUrl;
+          console.log(`✅ PRIORITY C FIX: Fallback transparent background applied`);
+        }
       }
     } else {
       console.log(`🎨 Background operations detected - background state updated in refinement chain`);
@@ -3205,7 +4006,7 @@ async function performMultiStepRefinement(imageUrl, instruction, originalData, r
  * Apply multiple operations to structured prompt with background context management
  * Implements Requirements 2.1, 2.3 for background persistence during multi-operations
  */
-function applyCombinedOperationsWithBackground(originalPrompt, operations, fullInstruction, backgroundContext) {
+function applyCombinedOperationsWithBackground(originalPrompt, operations, fullInstruction, backgroundContext, imageUrl) {
   console.log("🔧 Applying enhanced combined operations with background persistence management");
   
   // Create a deep copy of the original prompt
@@ -3243,15 +4044,24 @@ function applyCombinedOperationsWithBackground(originalPrompt, operations, fullI
       }
     }
   } else {
-    // For non-background operations, preserve background from context or chain (Requirements 4.1, 4.2)
-    if (backgroundContext && backgroundContext.background && backgroundContext.isExplicitlySet) {
-      // Preserve existing background for non-background operations (Requirements 4.1, 4.2)
+    // PRIORITY C FIX: For non-background operations, preserve background from refinement chain (Requirements 4.1, 4.2)
+    console.log(`     🔒 PRIORITY C FIX: No background operations, preserving existing background`);
+    
+    // Get the current background state from the refinement chain
+    const currentBackgroundState = backgroundContextManager.getCurrentBackgroundState(imageUrl);
+    
+    if (currentBackgroundState && currentBackgroundState.type === 'explicit' && currentBackgroundState.description !== 'transparent background') {
+      // Preserve explicit non-default background (Requirements 4.1, 4.2)
+      modifiedPrompt.background = currentBackgroundState.description;
+      console.log(`     🔒 PRIORITY C FIX: Preserved explicit background from chain: ${currentBackgroundState.description}`);
+    } else if (backgroundContext && backgroundContext.background && backgroundContext.isExplicitlySet) {
+      // Fallback to background context if available (Requirements 4.1, 4.2)
       modifiedPrompt.background = backgroundContext.background;
-      console.log(`     🔒 Preserved existing background: ${backgroundContext.background}`);
+      console.log(`     🔒 PRIORITY C FIX: Preserved background from context: ${backgroundContext.background}`);
     } else {
       // Maintain transparent background as default (Requirements 4.3)
       modifiedPrompt.background = 'transparent background';
-      console.log(`     🔒 Maintained transparent background as default`);
+      console.log(`     🔒 PRIORITY C FIX: Maintained transparent background as default`);
     }
   }
   
@@ -3454,14 +4264,27 @@ function modifyExistingObject(objects, operation) {
     const matchesDescription = description.includes(target);
     const matchesShapeColor = obj.shape_and_color && obj.shape_and_color.toLowerCase().includes(target);
     
-    // Also try partial matches for common objects
+    // Also try partial matches for common objects and related terms
     const commonObjects = ['hat', 'sunglasses', 'cigar', 'necklace', 'shirt', 'skull', 'teeth'];
     const partialMatch = commonObjects.some(commonObj => 
       target.includes(commonObj) && (description.includes(commonObj) || 
       (obj.shape_and_color && obj.shape_and_color.toLowerCase().includes(commonObj)))
     );
     
-    if (matchesDescription || matchesShapeColor || partialMatch) {
+    // CRITICAL FIX: Handle related object parts (teeth -> skull, eyes -> face, etc.)
+    const relatedMatches = {
+      'teeth': ['skull', 'head', 'face'],
+      'eyes': ['skull', 'head', 'face'],
+      'mouth': ['skull', 'head', 'face'],
+      'nose': ['skull', 'head', 'face'],
+      'jaw': ['skull', 'head', 'face']
+    };
+    
+    const relatedMatch = relatedMatches[target] && relatedMatches[target].some(related => 
+      description.includes(related) || (obj.shape_and_color && obj.shape_and_color.toLowerCase().includes(related))
+    );
+    
+    if (matchesDescription || matchesShapeColor || partialMatch || relatedMatch) {
       console.log(`   - ✅ MATCH FOUND! Modifying object ${i + 1}`);
       
       // Apply the modification
