@@ -868,10 +868,46 @@ async function analyzeRefinementInstructionEnhanced(instruction, originalData, b
   console.log(`🔍 Enhanced refinement analysis: "${instruction}"`);
   console.log(`   - Background context: ${backgroundContext ? 'Available' : 'None'}`);
   
+  // CRITICAL FIX: Check for multi-edit operations FIRST before background detection
+  // This prevents mixed operations from being treated as pure background operations
+  const multiEditPatterns = [
+    /\s+and\s+/i,
+    /\s*&\s*/,
+    /\s+plus\s+/i,
+    /\s+also\s+/i,
+    /\s+then\s+/i,
+    /,\s*(?=add|change|make|turn|give|put|place|remove)/i,
+    /;\s*(?=add|change|make|turn|give|put|place|remove)/i,
+    /(?:add|change|make|turn|give|put|place|remove)\s+[^,]+.*(?:add|change|make|turn|give|put|place|remove)/i,
+    /(?:add|change|make|turn|give|put|place|remove)\s+[^,]+\s+(?:and\s+)?(?:also\s+)?(?:then\s+)?(?:add|change|make|turn|give|put|place|remove)/i
+  ];
+  
+  const hasMultipleEdits = multiEditPatterns.some(pattern => pattern.test(instruction));
+  console.log(`🔍 DEBUG: hasMultipleEdits = ${hasMultipleEdits} for "${instruction}"`);
+  
+  if (hasMultipleEdits) {
+    const operations = parseMultipleOperationsEnhanced(instruction);
+    console.log(`🔍 Multi-edit detected: ${operations.length} operations found`);
+    
+    // Validate that we actually extracted multiple operations
+    if (operations.length > 1) {
+      return {
+        strategy: 'multi_step',
+        operations: operations,
+        originalOperationCount: operations.length,
+        conflictsResolved: false
+      };
+    } else {
+      console.log(`   - Only ${operations.length} operation found, checking for single background operation`);
+    }
+  }
+  
   // Check for background operations with enhanced detection (Requirements 2.2)
+  // Only treat as pure background operation if it's not part of a multi-edit
   const isBackgroundOperation = backgroundContextManager.isBackgroundOperation(instruction);
-  if (isBackgroundOperation) {
-    console.log(`   - Background operation detected`);
+  console.log(`🔍 DEBUG: isBackgroundOperation = ${isBackgroundOperation}`);
+  if (isBackgroundOperation && !hasMultipleEdits) {
+    console.log(`   - Pure background operation detected`);
     return {
       strategy: 'background_replacement',
       operations: [{
@@ -887,7 +923,9 @@ async function analyzeRefinementInstructionEnhanced(instruction, originalData, b
   }
   
   // For non-background operations, use original analysis but with background preservation
+  console.log(`🔍 DEBUG: Calling analyzeRefinementInstruction for: "${instruction}"`);
   const originalAnalysis = await analyzeRefinementInstruction(instruction, originalData);
+  console.log(`🔍 DEBUG: analyzeRefinementInstruction returned strategy: ${originalAnalysis.strategy}`);
   
   // Add background preservation metadata (Requirements 2.1, 2.3)
   originalAnalysis.backgroundPreservation = {
@@ -937,10 +975,12 @@ async function analyzeRefinementInstruction(instruction, originalData) {
   ];
   
   const hasMultipleEdits = multiEditPatterns.some(pattern => pattern.test(instruction));
+  console.log(`🔍 DEBUG: hasMultipleEdits = ${hasMultipleEdits} for "${instruction}"`);
   
   // CRITICAL FIX: Check for comma-separated lists first (higher priority)
   const hasCommas = instruction.includes(',');
   const isAddListPattern = /^add\s+.+,.*and\s+.+$/i.test(instruction);
+  console.log(`🔍 DEBUG: hasCommas = ${hasCommas}, isAddListPattern = ${isAddListPattern}`);
   
   if (hasCommas && isAddListPattern) {
     console.log('🎯 CRITICAL FIX: "add X, Y, and Z" list pattern detected - forcing multi-step');
@@ -1082,8 +1122,10 @@ async function analyzeRefinementInstruction(instruction, originalData) {
   }
   
   // CRITICAL FIX: Handle single operations before falling back to structured prompt
+  console.log(`🔍 DEBUG: About to call parseIndividualOperationWithValidation for: "${instruction}"`);
   const singleOperation = parseIndividualOperationWithValidation(instruction);
-  if (singleOperation && singleOperation.isValid && singleOperation.type !== 'general_edit') {
+  console.log(`🔍 DEBUG: parseIndividualOperationWithValidation returned:`, singleOperation);
+  if (singleOperation && singleOperation.isValid) {
     console.log(`🎯 CRITICAL FIX: Single operation detected: ${singleOperation.type}`);
     return {
       strategy: 'multi_step', // Use multi_step even for single operations for consistency
@@ -1092,6 +1134,8 @@ async function analyzeRefinementInstruction(instruction, originalData) {
       conflictsResolved: false,
       singleOperation: true
     };
+  } else {
+    console.log(`🔍 DEBUG: Single operation not valid or not found, falling back to structured_prompt`);
   }
   
   // Default to enhanced structured prompt approach
@@ -1123,6 +1167,47 @@ function parseMultipleOperationsEnhanced(instruction) {
   const operations = [];
   
   console.log(`🔍 FIXED Enhanced parsing of multi-edit instruction: "${instruction}"`);
+  
+  // CRITICAL FIX: Check mixed patterns FIRST before simple "add X and Y" pattern
+  // This prevents mixed operations from being incorrectly parsed as simple additions
+  
+  // Pattern 1: "add X and change background to Y"
+  const mixedPattern1 = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|make|set)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)$/i;
+  const mixedMatch1 = instruction.match(mixedPattern1);
+  
+  if (mixedMatch1) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 1 detected (object + background)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch1[1]} ${mixedMatch1[2]}`,
+      target: extractObjectFromPhrase(mixedMatch1[2]),
+      object: mixedMatch1[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${mixedMatch1[3]} background ${mixedMatch1[4]}`,
+      target: 'background',
+      value: mixedMatch1[4].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 1 extracted ${operations.length} operations`);
+    return operations;
+  }
   
   // CRITICAL FIX: Handle "add X, Y, and Z" pattern specifically
   const addListPattern = /^add\s+(.+)$/i;
@@ -1163,44 +1248,245 @@ function parseMultipleOperationsEnhanced(instruction) {
       return operations;
     }
     
-    // Handle simple "add X and Y" pattern
+    // Handle simple "add X and Y" pattern ONLY if it's not a mixed operation
     const simpleAndMatch = itemsString.match(/^(.+?)\s+and\s+(.+)$/i);
     if (simpleAndMatch) {
-      console.log(`   - 🎯 CRITICAL FIX: "add X and Y" pattern detected`);
       const firstItem = simpleAndMatch[1].trim();
       const secondItem = simpleAndMatch[2].trim();
       
-      // Create two operations directly
-      const op1 = {
-        type: 'object_addition',
-        instruction: `add ${firstItem}`,
-        target: extractObjectFromPhrase(firstItem),
-        object: firstItem,
-        action: 'add',
-        priority: 2,
-        isValid: true,
-        confidence: 0.95
-      };
+      // Check if second item contains action words (indicating mixed operation)
+      const hasActionWords = /\b(make|turn|change|color|paint|dye|background)\b/i.test(secondItem);
       
-      const op2 = {
-        type: 'object_addition',
-        instruction: `add ${secondItem}`,
-        target: extractObjectFromPhrase(secondItem),
-        object: secondItem,
-        action: 'add',
-        priority: 2,
-        isValid: true,
-        confidence: 0.95
-      };
-      
-      operations.push(op1);
-      operations.push(op2);
-      
-      console.log(`   - ✅ CRITICAL FIX: Created operation 1: "add ${firstItem}" (target: ${op1.target})`);
-      console.log(`   - ✅ CRITICAL FIX: Created operation 2: "add ${secondItem}" (target: ${op2.target})`);
-      console.log(`✅ CRITICAL FIX: Simple and pattern extracted ${operations.length} operations`);
-      return operations;
+      if (!hasActionWords) {
+        console.log(`   - 🎯 CRITICAL FIX: "add X and Y" simple pattern detected`);
+        
+        // Create two operations directly
+        const op1 = {
+          type: 'object_addition',
+          instruction: `add ${firstItem}`,
+          target: extractObjectFromPhrase(firstItem),
+          object: firstItem,
+          action: 'add',
+          priority: 2,
+          isValid: true,
+          confidence: 0.95
+        };
+        
+        const op2 = {
+          type: 'object_addition',
+          instruction: `add ${secondItem}`,
+          target: extractObjectFromPhrase(secondItem),
+          object: secondItem,
+          action: 'add',
+          priority: 2,
+          isValid: true,
+          confidence: 0.95
+        };
+        
+        operations.push(op1);
+        operations.push(op2);
+        
+        console.log(`   - ✅ CRITICAL FIX: Created operation 1: "add ${firstItem}" (target: ${op1.target})`);
+        console.log(`   - ✅ CRITICAL FIX: Created operation 2: "add ${secondItem}" (target: ${op2.target})`);
+        console.log(`✅ CRITICAL FIX: Simple and pattern extracted ${operations.length} operations`);
+        return operations;
+      } else {
+        console.log(`   - 🔍 Detected action words in second item, checking mixed patterns...`);
+      }
     }
+  }
+  
+  // CRITICAL FIX: Handle mixed operations (object + background) before general case
+  console.log(`   - 🔍 Checking for mixed operations in: "${instruction}"`);
+  
+  // Pattern 1: "add X and change background to Y"
+  const mixedPattern1 = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(change|make|set)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)$/i;
+  const mixedMatch1 = instruction.match(mixedPattern1);
+  
+  if (mixedMatch1) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 1 detected (object + background)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch1[1]} ${mixedMatch1[2]}`,
+      target: extractObjectFromPhrase(mixedMatch1[2]),
+      object: mixedMatch1[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `${mixedMatch1[3]} background ${mixedMatch1[4]}`,
+      target: 'background',
+      value: mixedMatch1[4].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 1 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // Pattern 2: "add X and make/change Y Z" (object + color/modification change)
+  const mixedPattern2 = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+(make|turn|change)\s+(?:the\s+)?(.+?)\s+(\w+)$/i;
+  const mixedMatch2 = instruction.match(mixedPattern2);
+  
+  if (mixedMatch2) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 2 detected (object + color/modification change)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch2[1]} ${mixedMatch2[2]}`,
+      target: extractObjectFromPhrase(mixedMatch2[2]),
+      object: mixedMatch2[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const modificationOp = {
+      type: 'object_modification',
+      instruction: `${mixedMatch2[3]} ${mixedMatch2[4]} ${mixedMatch2[5]}`,
+      target: mixedMatch2[4].trim(),
+      value: mixedMatch2[5].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(modificationOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created modification operation: "${modificationOp.instruction}" (target: ${modificationOp.target}, value: ${modificationOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 2 extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // Pattern 2b: "add X and change the color of Y to Z" (object + detailed color change)
+  const mixedPattern2b = /^(add|put|place|give)\s+(?:a\s+|an\s+)?(.+?)\s+and\s+change\s+(?:the\s+)?color\s+of\s+(?:the\s+)?(.+?)\s+to\s+(\w+)$/i;
+  const mixedMatch2b = instruction.match(mixedPattern2b);
+  
+  if (mixedMatch2b) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 2b detected (object + detailed color change)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch2b[1]} ${mixedMatch2b[2]}`,
+      target: extractObjectFromPhrase(mixedMatch2b[2]),
+      object: mixedMatch2b[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const colorOp = {
+      type: 'object_modification',
+      instruction: `change color of ${mixedMatch2b[3]} to ${mixedMatch2b[4]}`,
+      target: mixedMatch2b[3].trim(),
+      value: mixedMatch2b[4].trim(),
+      action: 'modify',
+      priority: 3,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(colorOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created color operation: "${colorOp.instruction}" (target: ${colorOp.target}, value: ${colorOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 2b extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // Pattern 2c: "add X, Y background" or "add X, forest background"
+  const mixedPattern2c = /^(add|put|place)\s+(.+?),\s*(.+?)\s+background$/i;
+  const mixedMatch2c = instruction.match(mixedPattern2c);
+  
+  if (mixedMatch2c) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 2c detected (object, background)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `${mixedMatch2c[1]} ${mixedMatch2c[2]}`,
+      target: extractObjectFromPhrase(mixedMatch2c[2]),
+      object: mixedMatch2c[2].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `add ${mixedMatch2c[3]} background`,
+      target: 'background',
+      value: mixedMatch2c[3].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.9
+    };
+    
+    operations.push(objectOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 2c extracted ${operations.length} operations`);
+    return operations;
+  }
+  
+  // Pattern 3: "X and Y" where X is object and Y is environment word
+  const mixedPattern3 = /^(.+?)\s+and\s+(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)$/i;
+  const mixedMatch3 = instruction.match(mixedPattern3);
+  
+  if (mixedMatch3) {
+    console.log(`   - 🎯 CRITICAL FIX: Mixed operation pattern 3 detected (object and environment)`);
+    
+    const objectOp = {
+      type: 'object_addition',
+      instruction: `add ${mixedMatch3[1]}`,
+      target: extractObjectFromPhrase(mixedMatch3[1]),
+      object: mixedMatch3[1].trim(),
+      action: 'add',
+      priority: 2,
+      isValid: true,
+      confidence: 0.8
+    };
+    
+    const backgroundOp = {
+      type: 'background_edit',
+      instruction: `change background to ${mixedMatch3[2]}`,
+      target: 'background',
+      value: mixedMatch3[2].trim(),
+      action: 'modify',
+      priority: 1,
+      isValid: true,
+      confidence: 0.8
+    };
+    
+    operations.push(objectOp);
+    operations.push(backgroundOp);
+    
+    console.log(`   - ✅ CRITICAL FIX: Created object operation: "${objectOp.instruction}" (target: ${objectOp.target})`);
+    console.log(`   - ✅ CRITICAL FIX: Created background operation: "${backgroundOp.instruction}" (value: ${backgroundOp.value})`);
+    console.log(`✅ CRITICAL FIX: Mixed operation pattern 3 extracted ${operations.length} operations`);
+    return operations;
   }
   
   // GENERAL CASE: Use enhanced splitting strategies
@@ -1319,22 +1605,56 @@ function parseMultipleOperationsEnhanced(instruction) {
 function parseIndividualOperationWithValidation(instruction) {
   const lowerInstruction = instruction.toLowerCase();
   
-  // Enhanced background operations with synonym support (Requirements 3.2)
+  console.log(`🔍 DEBUG: parseIndividualOperationWithValidation called with: "${instruction}"`);
+  
+  // Enhanced background operations with vague phrasing support
   const backgroundPatterns = [
     /(?:make|change|set|give)\s+(?:the\s+)?background\s+(?:to\s+)?(.+)/i,
     /(?:add|put)\s+(?:a\s+)?(.+)\s+background/i,
     /(.+)\s+(?:falling\s+)?behind\s+(?:him|her|it|them)/i,
-    /background\s+(?:of\s+|with\s+)?(.+)/i
+    /background\s+(?:of\s+|with\s+)?(.+)/i,
+    
+    // CRITICAL FIX: Handle vague background requests
+    // "forest behind" - detect environment words followed by "behind"
+    /^(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)\s+behind$/i,
+    
+    // "forest scene" - detect environment + scene/setting
+    /^(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)\s+(?:scene|setting|environment)$/i,
+    
+    // "put in forest" - detect "put in [environment]"
+    /^put\s+in\s+(?:a\s+)?(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)$/i,
+    
+    // "different background" - handle vague background changes
+    /^(?:different|new|another|change)\s+background$/i,
+    
+    // CRITICAL FIX: "forest background" - environment + background
+    /^(forest|snow|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)\s+background$/i,
+    
+    // CRITICAL FIX: "snowfall behind" - environment + behind (without pronouns)
+    /^(forest|snow|snowfall|rain|city|beach|mountain|desert|ocean|sky|clouds?|sunset|sunrise|night|day)\s+behind$/i,
+    
+    // Single environment words that likely mean background
+    /^(forest|snow|rain|city|beach|mountain|desert|ocean|sunset|sunrise|night|day)$/i
   ];
   
   for (const pattern of backgroundPatterns) {
     const match = instruction.match(pattern);
     if (match) {
+      let backgroundValue = match[1] ? match[1].trim() : 'custom background';
+      
+      // Handle special cases for vague background requests
+      if (pattern.source.includes('different|new|another')) {
+        backgroundValue = 'different background setting';
+      } else if (pattern.source.includes('^(forest|snow')) {
+        // Single environment word - use as is
+        backgroundValue = match[1] || match[0];
+      }
+      
       return {
         type: 'background_edit',
         instruction: instruction,
         target: 'background',
-        value: match[1].trim(),
+        value: backgroundValue,
         action: 'modify',
         priority: 1,
         isValid: true,
@@ -1343,7 +1663,106 @@ function parseIndividualOperationWithValidation(instruction) {
     }
   }
   
-  // Enhanced addition operations with comprehensive patterns
+  // CRITICAL FIX: Check modification patterns BEFORE addition patterns
+  // This prevents "put some red on it" from being parsed as addition instead of modification
+  
+  // Enhanced color/modification operations with unusual phrasing support
+  const modificationPatterns = [
+    // Handle "change the color of the X to Y" pattern
+    /(?:change|alter)\s+(?:the\s+)?color\s+of\s+(?:the\s+)?(.+?)\s+to\s+(\w+)/i,
+    
+    // Handle "make/turn the X Y" pattern  
+    /(?:make|turn)\s+(?:the\s+)?(.+?)\s+(\w+)$/i,
+    
+    // Handle "change X color to Y" pattern
+    /(?:change|alter)\s+(?:the\s+)?(.+?)\s+color\s+to\s+(\w+)/i,
+    
+    // Handle "color/paint/dye the X Y" pattern
+    /(?:color|paint|dye)\s+(?:the\s+)?(.+?)\s+(\w+)/i,
+    
+    // Handle "add gold teeth" pattern (reverse order)
+    /(?:add|give)\s+(\w+)\s+(.+)/i,
+    
+    // CRITICAL FIX: Handle unusual color change phrasings
+    // "change the color to blue" - assume main subject when no specific target
+    /(?:change|alter)\s+(?:the\s+)?color\s+to\s+(\w+)/i,
+    
+    // "turn blue" - assume main subject
+    /^(?:turn|make\s+it)\s+(\w+)$/i,
+    
+    // "color blue" or "blue color" - detect color words
+    /^(?:color\s+(\w+)|(\w+)\s+color)$/i,
+    
+    // "make everything X" - target everything
+    /(?:make|turn)\s+everything\s+(\w+)/i,
+    
+    // CRITICAL FIX: "put some red on it" - weird color phrasing
+    /put\s+(?:some\s+)?(\w+)\s+on\s+it/i,
+    
+    // "make it more X" - enhancement phrasing
+    /make\s+it\s+more\s+(\w+)/i,
+    
+    // "add X to it" - color addition phrasing
+    /add\s+(\w+)\s+to\s+it/i
+  ];
+  
+  for (const pattern of modificationPatterns) {
+    const match = instruction.match(pattern);
+    if (match) {
+      let target, value;
+      
+      // Safely extract values with null checks
+      if (pattern.source.includes('add|give')) {
+        // Handle "add gold teeth" -> target: teeth, value: gold
+        value = match[1] || '';
+        target = match[2] || '';
+      } else if (pattern.source.includes('color.*to')) {
+        // Handle "change the color to blue" - assume main subject
+        target = 'main subject';
+        value = match[1] || '';
+      } else if (pattern.source.includes('turn.*make.*it')) {
+        // Handle "turn blue" or "make it blue" - assume main subject
+        target = 'main subject';
+        value = match[1] || '';
+      } else if (pattern.source.includes('color.*color')) {
+        // Handle "color blue" or "blue color"
+        target = 'main subject';
+        value = match[1] || match[2] || '';
+      } else if (pattern.source.includes('everything')) {
+        // Handle "make everything blue"
+        target = 'everything';
+        value = match[1] || '';
+      } else if (pattern.source.includes('put.*some.*on')) {
+        // Handle "put some red on it" - weird color phrasing
+        target = 'main subject';
+        value = match[1] || '';
+      } else if (pattern.source.includes('make.*it.*more')) {
+        // Handle "make it more red" - enhancement phrasing
+        target = 'main subject';
+        value = match[1] || '';
+      } else if (pattern.source.includes('add.*to.*it')) {
+        // Handle "add red to it" - color addition phrasing
+        target = 'main subject';
+        value = match[1] || '';
+      } else {
+        target = match[1] || '';
+        value = match[2] || '';
+      }
+      
+      return {
+        type: 'object_modification',
+        instruction: instruction,
+        target: target,
+        value: value,
+        action: 'modify',
+        priority: 3,
+        isValid: true,
+        confidence: 0.8
+      };
+    }
+  }
+  
+  // Enhanced addition operations with comprehensive patterns (moved after modification patterns)
   const additionPatterns = [
     /(?:add|put|place|attach)\s+(?:a\s+|an\s+|some\s+)?(.+?)(?:\s+(?:to|on|onto)\s+(.+?))?$/i,
     /give\s+(?:him|her|it|them)\s+(?:a\s+|an\s+|some\s+)?(.+)/i,
@@ -1370,51 +1789,6 @@ function parseIndividualOperationWithValidation(instruction) {
     }
   }
   
-  // Enhanced color/modification operations
-  const modificationPatterns = [
-    // Handle "change the color of the X to Y" pattern
-    /(?:change|alter)\s+(?:the\s+)?color\s+of\s+(?:the\s+)?(.+?)\s+to\s+(\w+)/i,
-    
-    // Handle "make/turn the X Y" pattern  
-    /(?:make|turn)\s+(?:the\s+)?(.+?)\s+(\w+)$/i,
-    
-    // Handle "change X color to Y" pattern
-    /(?:change|alter)\s+(?:the\s+)?(.+?)\s+color\s+to\s+(\w+)/i,
-    
-    // Handle "color/paint/dye the X Y" pattern
-    /(?:color|paint|dye)\s+(?:the\s+)?(.+?)\s+(\w+)/i,
-    
-    // Handle "add gold teeth" pattern (reverse order)
-    /(?:add|give)\s+(\w+)\s+(.+)/i
-  ];
-  
-  for (const pattern of modificationPatterns) {
-    const match = instruction.match(pattern);
-    if (match) {
-      let target, value;
-      
-      if (pattern.source.includes('add|give')) {
-        // Handle "add gold teeth" -> target: teeth, value: gold
-        value = match[1].trim();
-        target = match[2].trim();
-      } else {
-        target = match[1].trim();
-        value = match[2].trim();
-      }
-      
-      return {
-        type: 'object_modification',
-        instruction: instruction,
-        target: target,
-        value: value,
-        action: 'modify',
-        priority: 3,
-        isValid: true,
-        confidence: 0.8
-      };
-    }
-  }
-  
   // Removal operations
   const removalPatterns = [
     /(?:remove|delete|take\s+away|get\s+rid\s+of)\s+(?:the\s+)?(.+)/i
@@ -1435,6 +1809,77 @@ function parseIndividualOperationWithValidation(instruction) {
     }
   }
   
+  // CRITICAL FIX: Enhanced fallback logic for vague instructions
+  
+  // Handle vague improvement requests
+  const vagueImprovementPatterns = [
+    /^(?:make\s+it\s+|change\s+it\s+|make\s+)?(?:better|cooler|nicer|more\s+interesting|different)$/i,
+    /^(?:improve|enhance|upgrade)\s+(?:it|this|the\s+image)?$/i,
+    /^(?:add\s+)?something\s+(?:cool|nice|interesting|good|better)$/i
+  ];
+  
+  for (const pattern of vagueImprovementPatterns) {
+    if (pattern.test(lowerInstruction)) {
+      return {
+        type: 'general_edit',
+        instruction: instruction,
+        target: 'overall appearance',
+        value: 'enhanced',
+        action: 'improve',
+        priority: 5,
+        isValid: true,
+        confidence: 0.6,
+        vague: true
+      };
+    }
+  }
+  
+  // Handle vague color requests
+  const vagueColorPatterns = [
+    /^(?:more\s+)?colorful$/i,
+    /^(?:add\s+)?(?:more\s+)?colors?$/i,
+    /^(?:make\s+it\s+)?(?:more\s+)?vibrant$/i
+  ];
+  
+  for (const pattern of vagueColorPatterns) {
+    if (pattern.test(lowerInstruction)) {
+      return {
+        type: 'object_modification',
+        instruction: instruction,
+        target: 'overall colors',
+        value: 'more colorful',
+        action: 'modify',
+        priority: 4,
+        isValid: true,
+        confidence: 0.7,
+        vague: true
+      };
+    }
+  }
+  
+  // Handle vague change requests
+  const vagueChangePatterns = [
+    /^(?:change\s+)?(?:it|this|the\s+image)$/i,
+    /^(?:modify|alter)\s+(?:it|this|the\s+image)?$/i,
+    /^(?:do\s+)?something$/i
+  ];
+  
+  for (const pattern of vagueChangePatterns) {
+    if (pattern.test(lowerInstruction)) {
+      return {
+        type: 'general_edit',
+        instruction: instruction,
+        target: 'image',
+        value: 'modified',
+        action: 'change',
+        priority: 5,
+        isValid: true,
+        confidence: 0.4,
+        vague: true
+      };
+    }
+  }
+  
   // Generic operation fallback with validation
   if (lowerInstruction.length > 3 && /\b(?:add|change|make|turn|give|put|place|remove)\b/.test(lowerInstruction)) {
     return {
@@ -1449,6 +1894,7 @@ function parseIndividualOperationWithValidation(instruction) {
   }
   
   // Invalid operation
+  console.log(`🔍 DEBUG: No valid operation found for: "${instruction}"`);
   return {
     isValid: false,
     invalidReason: 'no_recognizable_action_pattern',
@@ -6225,7 +6671,9 @@ app.post("/api/test/multi-edit", async (req, res) => {
     console.log(`🧪 CRITICAL FIX: Testing multi-edit for: "${instruction}"`);
     
     // Test the analysis
+    console.log(`🔍 DEBUG: About to call analyzeRefinementInstructionEnhanced`);
     const analysis = await analyzeRefinementInstructionEnhanced(instruction, null, null);
+    console.log(`🔍 DEBUG: analyzeRefinementInstructionEnhanced completed successfully`);
     
     console.log(`📊 CRITICAL FIX: Analysis result:`);
     console.log(`   - Strategy: ${analysis.strategy}`);
