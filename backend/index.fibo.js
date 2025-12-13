@@ -7539,6 +7539,324 @@ app.post("/api/test/multi-edit", async (req, res) => {
   }
 });
 
+/**
+ * HACKATHON FEATURE: Smart Design Vectorization
+ * Convert uploaded designs to vector graphics for infinite scalability
+ */
+app.post("/api/vectorize-design", async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { message: "Valid image data is required" }
+      });
+    }
+
+    console.log(`🎨 Converting design to vector graphics...`);
+
+    // Extract base64 data from data URL if needed
+    let processedImageData = imageData;
+    if (imageData.startsWith('data:image/')) {
+      processedImageData = imageData.split(',')[1];
+    }
+
+    // Use FIBO's vector generation capability
+    const vectorResult = await briaRequest(`https://engine.prod.bria-api.com/v1/text-to-vector/base`, {
+      prompt: "Convert this design to a clean vector graphic with sharp edges and solid colors, suitable for t-shirt printing",
+      image_prompt_file: processedImageData,
+      image_prompt_mode: "regular",
+      image_prompt_scale: 0.9,
+      sync: false
+    });
+
+    if (!vectorResult.success) {
+      return res.status(vectorResult.status || 500).json({
+        success: false,
+        error: vectorResult.error
+      });
+    }
+
+    const vectorPollResult = await pollBriaStatus(vectorResult.data.request_id);
+    const filename = `vector_${Date.now()}.svg`;
+    const localUrl = await downloadAndSaveImage(vectorPollResult.imageUrl, filename);
+
+    res.json({
+      success: true,
+      message: "Design successfully converted to vector graphics",
+      imageUrl: localUrl,
+      originalUrl: vectorPollResult.imageUrl,
+      isVector: true,
+      infinitelyScalable: true
+    });
+
+  } catch (error) {
+    console.error("Vectorization error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
+/**
+ * HACKATHON FEATURE: AI-Powered Design Variations
+ * Generate multiple style variations of uploaded designs
+ */
+app.post("/api/generate-variations", async (req, res) => {
+  try {
+    const { imageData, styles } = req.body;
+    
+    if (!imageData || !styles || !Array.isArray(styles)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "Valid image data and styles array required" }
+      });
+    }
+
+    console.log(`🎨 Generating ${styles.length} design variations...`);
+
+    let processedImageData = imageData;
+    if (imageData.startsWith('data:image/')) {
+      processedImageData = imageData.split(',')[1];
+    }
+
+    const variations = [];
+    
+    for (const style of styles) {
+      const variationResult = await briaRequest(`${BRIA_BASE_URL}/image/generate`, {
+        prompt: `Recreate this design in ${style} style, maintaining the core elements but adapting the aesthetic, transparent background`,
+        image_prompt_file: processedImageData,
+        image_prompt_mode: "style_only",
+        image_prompt_scale: 0.7,
+        sync: false
+      });
+
+      if (variationResult.success) {
+        const pollResult = await pollBriaStatus(variationResult.data.request_id);
+        const filename = `variation_${style.replace(/\s+/g, '_')}_${Date.now()}.png`;
+        const localUrl = await downloadAndSaveImage(pollResult.imageUrl, filename);
+        
+        variations.push({
+          style,
+          imageUrl: localUrl,
+          originalUrl: pollResult.imageUrl
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Generated ${variations.length} design variations`,
+      variations,
+      originalDesign: imageData
+    });
+
+  } catch (error) {
+    console.error("Variation generation error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
+/**
+ * Process uploaded image with advanced multi-step enhancement
+ */
+app.post("/api/process-upload", async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    
+    // Validate input
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { message: "Valid image data is required" }
+      });
+    }
+
+    console.log(`🖼️  Processing uploaded image with direct background removal`);
+
+    // Create isolated background context for this upload processing
+    const requestId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const backgroundContext = backgroundContextManager.createIsolatedContext(requestId);
+    
+    // Set transparent background as default for uploads
+    backgroundContextManager.setBackground(requestId, 'transparent background', false);
+
+    // Step 1: Remove background directly from uploaded image
+    console.log(`🎨 Removing background from uploaded image...`);
+    
+    // Extract base64 data from data URL if needed
+    let processedImageData = imageData;
+    if (imageData.startsWith('data:image/')) {
+      processedImageData = imageData.split(',')[1];
+      console.log(`📝 Extracted base64 data from data URL`);
+    }
+    
+    const backgroundRemovalResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/remove_background`, {
+      image: processedImageData,
+      force_background_detection: true,  // Advanced: Force better background detection
+      preserve_alpha: true,              // Advanced: Preserve existing alpha channels
+      sync: false
+    });
+
+    if (!backgroundRemovalResult.success) {
+      return res.status(backgroundRemovalResult.status || 500).json({
+        success: false,
+        error: { 
+          message: `Background removal failed: ${backgroundRemovalResult.error?.message}` 
+        }
+      });
+    }
+
+    console.log(`📝 Background removal request ID: ${backgroundRemovalResult.data.request_id}`);
+    const bgRemovalPollResult = await pollBriaStatus(backgroundRemovalResult.data.request_id);
+    const processedImageUrl = bgRemovalPollResult.imageUrl;
+    console.log(`✅ Background removal completed`);
+    
+    // Step 1.5: Advanced cleanup for stubborn background artifacts using mask generation
+    console.log(`🎯 Generating object mask for advanced cleanup...`);
+    
+    const maskResult = await briaRequest(`https://engine.prod.bria-api.com/v1/objects/mask_generator`, {
+      image_file: processedImageUrl,
+      sync: false
+    });
+
+    let cleanedImageUrl = processedImageUrl;
+    let maskCleanupSuccess = false;
+
+    if (maskResult.success) {
+      console.log(`📝 Mask generation request ID: ${maskResult.data.request_id}`);
+      const maskPollResult = await pollBriaStatus(maskResult.data.request_id);
+      
+      // Use the generated mask to perform selective cleanup
+      console.log(`🧹 Performing mask-based cleanup...`);
+      const cleanupResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/erase`, {
+        image: processedImageUrl,
+        mask: maskPollResult.imageUrl,
+        sync: false
+      });
+
+      if (cleanupResult.success) {
+        console.log(`📝 Cleanup request ID: ${cleanupResult.data.request_id}`);
+        const cleanupPollResult = await pollBriaStatus(cleanupResult.data.request_id);
+        cleanedImageUrl = cleanupPollResult.imageUrl;
+        maskCleanupSuccess = true;
+        console.log(`✅ Advanced mask-based cleanup completed`);
+      }
+    } else {
+      console.warn(`⚠️  Mask generation failed, skipping advanced cleanup: ${maskResult.error?.message}`);
+    }
+    
+    // Step 2: Advanced upscaling with resolution verification
+    console.log(`🔍 Upscaling image resolution with quality enhancement...`);
+    
+    // Use enhance first (which includes upscaling + quality improvement)
+    const enhanceUpscaleResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/enhance`, {
+      image: cleanedImageUrl,
+      sync: false
+    });
+
+    let enhancedImageUrl;
+    let enhanceSuccess = false;
+
+    if (!enhanceUpscaleResult.success) {
+      console.warn(`⚠️  Enhancement+upscaling failed, using background-removed image: ${enhanceUpscaleResult.error?.message}`);
+      enhancedImageUrl = processedImageUrl;
+    } else {
+      console.log(`📝 Enhancement+upscaling request ID: ${enhanceUpscaleResult.data.request_id}`);
+      const enhancePollResult = await pollBriaStatus(enhanceUpscaleResult.data.request_id);
+      enhancedImageUrl = enhancePollResult.imageUrl;
+      enhanceSuccess = true;
+      console.log(`✅ Enhancement+upscaling completed`);
+    }
+    
+    // Step 3: Additional dedicated upscaling for maximum resolution (if enhance wasn't enough)
+    console.log(`🔍 Applying additional resolution increase...`);
+    
+    const additionalUpscaleResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/increase_resolution`, {
+      image: enhancedImageUrl,
+      sync: false
+    });
+
+    let finalImageUrl;
+    let additionalUpscaleSuccess = false;
+
+    if (!additionalUpscaleResult.success) {
+      console.warn(`⚠️  Additional upscaling failed, using enhanced image: ${additionalUpscaleResult.error?.message}`);
+      finalImageUrl = enhancedImageUrl;
+    } else {
+      console.log(`📝 Additional upscaling request ID: ${additionalUpscaleResult.data.request_id}`);
+      const additionalUpscalePollResult = await pollBriaStatus(additionalUpscaleResult.data.request_id);
+      finalImageUrl = additionalUpscalePollResult.imageUrl;
+      additionalUpscaleSuccess = true;
+      console.log(`✅ Additional upscaling completed - maximum resolution achieved`);
+    }
+    
+    // Download and save the final processed image locally
+    const filename = `processed_${requestId}_${Date.now()}.png`;
+    const localUrl = await downloadAndSaveImage(finalImageUrl, filename);
+
+    // Store generation data for potential refinements
+    const generationData = {
+      request_id: requestId,
+      upload_request_id: requestId,
+      original_prompt: 'Uploaded design with background removed',
+      enhanced_prompt: 'Processed uploaded design with transparent background',
+      structured_prompt: null,
+      seed: null,
+      image_url: finalImageUrl,
+      local_url: localUrl,
+      has_transparent_bg: true,
+      background_context: backgroundContext,
+      is_upload_processed: true,
+      processing_method: 'background_removal',
+      created_at: new Date().toISOString()
+    };
+    
+    // Store for refinement use
+    generationCache.set(finalImageUrl, generationData);
+    generationCache.set(localUrl, generationData);
+    
+    console.log(`💾 Stored processed upload data for URLs:`);
+    console.log(`   - Final: ${finalImageUrl}`);
+    console.log(`   - Local: ${localUrl}`);
+    console.log(`   - Method: ${generationData.processing_method}`);
+
+    res.json({
+      success: true,
+      message: `Advanced processing completed: background removal${maskCleanupSuccess ? ' + mask cleanup' : ''}${enhanceSuccess ? ' + enhancement' : ''}${additionalUpscaleSuccess ? ' + max resolution' : ''}`,
+      imageUrl: localUrl,
+      originalUrl: finalImageUrl,
+      requestId: requestId,
+      hasTransparentBg: true,
+      isProcessedUpload: true,
+      processingMethod: 'advanced_multi_step',
+      backgroundRemoved: true,
+      maskCleanup: maskCleanupSuccess,
+      enhanced: enhanceSuccess,
+      maxResolution: additionalUpscaleSuccess,
+      preservesOriginalDesign: true,
+      processingSteps: [
+        'background_removal_with_advanced_params',
+        maskCleanupSuccess ? 'mask_based_cleanup' : null,
+        'enhancement_with_upscaling',
+        additionalUpscaleSuccess ? 'additional_resolution_boost' : null
+      ].filter(Boolean)
+    });
+
+  } catch (error) {
+    console.error("Upload processing error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
 // ====== START SERVER ======
 app.listen(PORT, () => {
   console.log(`🚀 Bria T-shirt Design API running on http://localhost:${PORT}`);
