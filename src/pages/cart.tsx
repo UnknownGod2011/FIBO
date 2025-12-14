@@ -97,48 +97,97 @@ export default function Cart() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
               >
-                {/* T-shirt Preview */}
-                <div className="relative w-24 h-24 flex-shrink-0">
-                  <img
-                    src="/mockups/tshirt.png"
-                    alt="T-shirt"
-                    className="w-full h-full object-contain"
-                  />
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      backgroundColor: item.tshirtColor,
-                      mixBlendMode: "multiply",
-                      opacity: 0.75,
-                      maskImage: "url(/mockups/tshirt.png)",
-                      WebkitMaskImage: "url(/mockups/tshirt.png)",
-                      maskRepeat: "no-repeat",
-                      maskPosition: "center",
-                      maskSize: "contain",
-                    }}
-                  />
-                  {item.imageUrl && (
+                {/* T-shirt Previews - Front & Back */}
+                <div className="flex space-x-3 flex-shrink-0">
+                  {/* Front Preview */}
+                  <div className="relative w-20 h-20">
                     <img
-                      src={item.imageUrl}
-                      alt="Design"
-                      className="absolute inset-0 w-8 h-8 object-contain m-auto"
+                      src="/mockups/tshirt.png"
+                      alt="T-shirt front"
+                      className="w-full h-full object-contain"
+                    />
+                    <div
+                      className="absolute inset-0"
                       style={{
-                        top: '30%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        mixBlendMode: "overlay",
-                        opacity: 0.9
+                        backgroundColor: item.tshirtColor,
+                        mixBlendMode: "multiply",
+                        opacity: 0.75,
+                        maskImage: "url(/mockups/tshirt.png)",
+                        WebkitMaskImage: "url(/mockups/tshirt.png)",
+                        maskRepeat: "no-repeat",
+                        maskPosition: "center",
+                        maskSize: "contain",
                       }}
                     />
-                  )}
+                    {item.frontDesign.imageUrl && (
+                      <img
+                        src={item.frontDesign.imageUrl}
+                        alt="Front design"
+                        className="absolute inset-0 w-6 h-6 object-contain m-auto"
+                        style={{
+                          top: '30%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          mixBlendMode: "overlay",
+                          opacity: 0.9
+                        }}
+                      />
+                    )}
+                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1 rounded">
+                      Front
+                    </div>
+                  </div>
+
+                  {/* Back Preview */}
+                  <div className="relative w-20 h-20">
+                    <img
+                      src="/mockups/tshirtbp.png"
+                      alt="T-shirt back"
+                      className="w-full h-full object-contain"
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        backgroundColor: item.tshirtColor,
+                        mixBlendMode: "multiply",
+                        opacity: 0.75,
+                        maskImage: "url(/mockups/tshirtbp.png)",
+                        WebkitMaskImage: "url(/mockups/tshirtbp.png)",
+                        maskRepeat: "no-repeat",
+                        maskPosition: "center",
+                        maskSize: "contain",
+                      }}
+                    />
+                    {item.backDesign.imageUrl && (
+                      <img
+                        src={item.backDesign.imageUrl}
+                        alt="Back design"
+                        className="absolute inset-0 w-6 h-6 object-contain m-auto"
+                        style={{
+                          top: '30%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          mixBlendMode: "overlay",
+                          opacity: 0.9
+                        }}
+                      />
+                    )}
+                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white text-xs px-1 rounded">
+                      Back
+                    </div>
+                  </div>
                 </div>
 
                 {/* Item Details */}
                 <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{item.design}</h3>
-                  <p className="text-sm text-gray-600">
-                    Color: <span className="inline-block w-4 h-4 rounded-full border border-gray-300 ml-1" style={{ backgroundColor: item.tshirtColor }} />
-                  </p>
+                  <h3 className="font-medium text-gray-900">Custom T-shirt</h3>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p>Front: {item.frontDesign.imageUrl ? item.frontDesign.design : 'No design'}</p>
+                    <p>Back: {item.backDesign.imageUrl ? item.backDesign.design : 'No design'}</p>
+                    <p>
+                      Color: <span className="inline-block w-4 h-4 rounded-full border border-gray-300 ml-1" style={{ backgroundColor: item.tshirtColor }} />
+                    </p>
+                  </div>
                   <p className="text-sm text-gray-500">Added: {new Date(item.addedAt).toLocaleDateString()}</p>
                 </div>
 

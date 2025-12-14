@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Rnd } from "react-rnd";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TShirtMockupProps {
@@ -7,6 +8,8 @@ interface TShirtMockupProps {
   design?: string | null;
   material: string;
   size: string;
+  side?: 'front' | 'back';
+  onSideSwitch?: (side: 'front' | 'back') => void;
 }
 
 const TShirtMockup: React.FC<TShirtMockupProps> = ({
@@ -14,6 +17,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
   design,
   material,
   size,
+  side = 'front',
+  onSideSwitch,
 }) => {
   const [category, setCategory] = useState("T-shirt");
   const [selectedMaterial, setSelectedMaterial] = useState(material || "Cotton");
@@ -33,13 +38,29 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     }
   };
 
-  const [designState, setDesignState] = useState({
+  // SEPARATE design states for front and back (CRITICAL FIX)
+  const [frontDesignState, setFrontDesignState] = useState({
     x: 205, // Centered horizontally on T-shirt chest area
     y: 280, // Positioned in center of T-shirt chest (away from collar)
     width: 150,
     height: 150,
     rotation: 0,
   });
+
+  const [backDesignState, setBackDesignState] = useState({
+    x: 205, // Centered horizontally on T-shirt chest area
+    y: 280, // Positioned in center of T-shirt chest (away from collar)
+    width: 150,
+    height: 150,
+    rotation: 0,
+  });
+
+  // Get current design state based on active side
+  const currentDesignState = side === 'front' ? frontDesignState : backDesignState;
+  const setCurrentDesignState = side === 'front' ? setFrontDesignState : setBackDesignState;
+
+  // Transition animation state
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const rotateRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,7 +76,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     const centerX = box.left + box.width / 2;
     const centerY = box.top + box.height / 2;
     const startAngle = Math.atan2(startY - centerY, startX - centerX);
-    const startRotation = designState.rotation;
+    const startRotation = currentDesignState.rotation;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const currentAngle = Math.atan2(
@@ -63,7 +84,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         moveEvent.clientX - centerX
       );
       const rotationDeg = (currentAngle - startAngle) * (180 / Math.PI);
-      setDesignState((prev) => ({
+      setCurrentDesignState((prev) => ({
         ...prev,
         rotation: startRotation + rotationDeg,
       }));
@@ -124,12 +145,17 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           <option value="3XL">3XL</option>
         </select>
 
-        <button
-          onClick={() => alert('Back-print feature coming soon!')}
-          className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors font-medium"
-        >
-          Back-print!
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => onSideSwitch?.(side === 'front' ? 'back' : 'front')}
+            className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors font-medium"
+          >
+            {side === 'front' ? 'Back-print!' : 'Front-print!'}
+          </button>
+          <span className="text-xs text-gray-500 font-medium">
+            {side === 'front' ? 'Front' : 'Back'}
+          </span>
+        </div>
 
 
 
@@ -141,7 +167,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
       {/* 🧢 Apparel Preview - positioned directly below dropdowns */}
       <div
         className={cn(
-          "relative transition-all duration-500 transform origin-center",
+          "relative transition-all duration-500 transform origin-center bg-transparent",
           getSizeScale()
         )}
         style={{ 
@@ -149,166 +175,206 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           height: 700,
           marginTop: '-120px',
           marginBottom: 0,
-          paddingTop: 0
+          paddingTop: 0,
+          backgroundColor: 'transparent'
         }}
       >
-        {/* T-shirt Mockup Display */}
-        <>
-            {/* Base Shirt */}
-            <img
-              src="/mockups/tshirt.png"
-              alt="T-shirt base"
-              className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-none"
-              draggable={false}
-            />
-
-            {/* Natural T-shirt Color Blending */}
-            <div
-              className="absolute inset-0 z-20 pointer-events-none"
-              style={{
-                backgroundColor: color,
-                mixBlendMode: "multiply",
-                opacity: color === "#FFFFFF" ? 0.1 : 0.8,
-                maskImage: "url(/mockups/tshirt.png)",
-                WebkitMaskImage: "url(/mockups/tshirt.png)",
-                maskRepeat: "no-repeat",
-                maskPosition: "center",
-                maskSize: "contain",
-              }}
-            />
-            
-            {/* Fabric Depth and Fold Definition */}
-            <div
-              className="absolute inset-0 z-21 pointer-events-none"
-              style={{
-                backgroundColor: color === "#FFFFFF" ? "#f5f5f5" : color,
-                mixBlendMode: "soft-light",
-                opacity: 0.3,
-                maskImage: "url(/mockups/tshirt.png)",
-                WebkitMaskImage: "url(/mockups/tshirt.png)",
-                maskRepeat: "no-repeat",
-                maskPosition: "center",
-                maskSize: "contain",
-              }}
-            />
-
-            {/* Subtle Fabric Texture Overlay */}
-            <div
-              className="absolute inset-0 z-22 pointer-events-none"
-              style={{
-                background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%), 
-                           radial-gradient(circle at 70% 80%, rgba(0,0,0,0.05) 0%, transparent 50%)`,
-                mixBlendMode: "overlay",
-                opacity: 0.4,
-                maskImage: "url(/mockups/tshirt.png)",
-                WebkitMaskImage: "url(/mockups/tshirt.png)",
-                maskRepeat: "no-repeat",
-                maskPosition: "center",
-                maskSize: "contain",
-              }}
-            />
-
-            {/* Design Layer */}
-            {design && (
-              <Rnd
-                bounds="parent"
-                size={{ width: designState.width, height: designState.height }}
-                position={{ x: designState.x, y: designState.y }}
-                onDragStop={(_, d) =>
-                  setDesignState((prev) => ({ ...prev, x: d.x, y: d.y }))
-                }
-                onResizeStop={(_, __, ref, ___, position) =>
-                  setDesignState({
-                    ...designState,
-                    width: parseFloat(ref.style.width),
-                    height: parseFloat(ref.style.height),
-                    ...position,
-                  })
-                }
-                lockAspectRatio
-                className="z-30 group"
+        {/* Navigation Arrows - Only show relevant arrow */}
+        {onSideSwitch && (
+          <>
+            {/* Show left arrow only when on back (to go to front) */}
+            {side === 'back' && (
+              <button
+                onClick={() => {
+                  setIsTransitioning(true);
+                  setTimeout(() => {
+                    onSideSwitch('front');
+                    setIsTransitioning(false);
+                  }, 150);
+                }}
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 z-40 p-2 bg-white/80 hover:bg-white border border-gray-200 rounded-full shadow-lg transition-all hover:scale-110"
+                title="Switch to front"
               >
-                <div
-                  ref={rotateRef}
-                  style={{
-                    transform: `rotate(${designState.rotation}deg)`,
-                    transformOrigin: "center center",
-                    width: "100%",
-                    height: "100%",
-                    position: "relative",
-                  }}
-                >
-                  {/* Base Design Layer - High Opacity for Color Preservation */}
-                  <img
-                    src={design}
-                    alt="Printed design"
-                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0"
-                    draggable={false}
-                    style={{
-                      objectFit: "contain",
-                      mixBlendMode: "normal",
-                      opacity: 0.95,
-                      filter: "contrast(1.08) brightness(1.02) saturate(1.05)",
-                      userSelect: "none",
-                    }}
-                  />
-
-                  {/* Fabric Integration Layer - Subtle Blending */}
-                  <img
-                    src={design}
-                    alt="Fabric integration layer"
-                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
-                    draggable={false}
-                    style={{
-                      objectFit: "contain",
-                      mixBlendMode: "multiply",
-                      opacity: 0.15,
-                      filter: "blur(0.3px)",
-                      userSelect: "none",
-                    }}
-                  />
-
-                  {/* Realistic Ink Absorption Effect */}
-                  <img
-                    src={design}
-                    alt="Ink absorption layer"
-                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
-                    draggable={false}
-                    style={{
-                      objectFit: "contain",
-                      mixBlendMode: "overlay",
-                      opacity: 0.25,
-                      filter: "blur(0.2px) brightness(0.95)",
-                      userSelect: "none",
-                    }}
-                  />
-
-                  {/* Subtle Shadow for Depth */}
-                  <img
-                    src={design}
-                    alt="Shadow layer"
-                    className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
-                    draggable={false}
-                    style={{
-                      objectFit: "contain",
-                      mixBlendMode: "multiply",
-                      opacity: 0.08,
-                      filter: "blur(1px) brightness(0.3)",
-                      transform: "translate(1px, 1px)",
-                      userSelect: "none",
-                    }}
-                  />
-
-                  {/* Rotation handle */}
-                  <div
-                    onMouseDown={handleMouseDown}
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 w-4 h-4 bg-indigo-400 rounded-full cursor-grab opacity-0 group-hover:opacity-100 transition"
-                    title="Rotate"
-                  />
-                </div>
-              </Rnd>
+                <ChevronLeft className="w-5 h-5 text-gray-700" />
+              </button>
             )}
-        </>
+            
+            {/* Show right arrow only when on front (to go to back) */}
+            {side === 'front' && (
+              <button
+                onClick={() => {
+                  setIsTransitioning(true);
+                  setTimeout(() => {
+                    onSideSwitch('back');
+                    setIsTransitioning(false);
+                  }, 150);
+                }}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 z-40 p-2 bg-white/80 hover:bg-white border border-gray-200 rounded-full shadow-lg transition-all hover:scale-110"
+                title="Switch to back"
+              >
+                <ChevronRight className="w-5 h-5 text-gray-700" />
+              </button>
+            )}
+          </>
+        )}
+
+        {/* T-shirt Mockup Display - SHARED CONTAINER FOR BOTH FRONT AND BACK */}
+        <div className={`absolute inset-0 bg-transparent transition-all duration-300 ${isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+          {/* Base Shirt */}
+          <img
+            src={side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"}
+            alt={`T-shirt ${side}`}
+            className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-none"
+            draggable={false}
+          />
+
+          {/* Natural T-shirt Color Blending */}
+          <div
+            className="absolute inset-0 z-20 pointer-events-none"
+            style={{
+              backgroundColor: color,
+              mixBlendMode: "multiply",
+              opacity: color === "#FFFFFF" ? 0.1 : 0.8,
+              maskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              WebkitMaskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              maskSize: "contain",
+            }}
+          />
+          
+          {/* Fabric Depth and Fold Definition */}
+          <div
+            className="absolute inset-0 z-21 pointer-events-none"
+            style={{
+              backgroundColor: color === "#FFFFFF" ? "#f5f5f5" : color,
+              mixBlendMode: "soft-light",
+              opacity: 0.3,
+              maskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              WebkitMaskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              maskSize: "contain",
+            }}
+          />
+
+          {/* Subtle Fabric Texture Overlay */}
+          <div
+            className="absolute inset-0 z-22 pointer-events-none"
+            style={{
+              background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%), 
+                         radial-gradient(circle at 70% 80%, rgba(0,0,0,0.05) 0%, transparent 50%)`,
+              mixBlendMode: "overlay",
+              opacity: 0.4,
+              maskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              WebkitMaskImage: `url(${side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"})`,
+              maskRepeat: "no-repeat",
+              maskPosition: "center",
+              maskSize: "contain",
+            }}
+          />
+
+          {/* Design Layer */}
+          {design && (
+            <Rnd
+              bounds="parent"
+              size={{ width: currentDesignState.width, height: currentDesignState.height }}
+              position={{ x: currentDesignState.x, y: currentDesignState.y }}
+              onDragStop={(_, d) =>
+                setCurrentDesignState((prev) => ({ ...prev, x: d.x, y: d.y }))
+              }
+              onResizeStop={(_, __, ref, ___, position) =>
+                setCurrentDesignState({
+                  ...currentDesignState,
+                  width: parseFloat(ref.style.width),
+                  height: parseFloat(ref.style.height),
+                  ...position,
+                })
+              }
+              lockAspectRatio
+              className="z-30 group"
+            >
+              <div
+                ref={rotateRef}
+                style={{
+                  transform: `rotate(${currentDesignState.rotation}deg)`,
+                  transformOrigin: "center center",
+                  width: "100%",
+                  height: "100%",
+                  position: "relative",
+                }}
+              >
+                {/* Base Design Layer - High Opacity for Color Preservation */}
+                <img
+                  src={design}
+                  alt="Printed design"
+                  className="w-full h-full object-contain rounded-sm select-none absolute inset-0"
+                  draggable={false}
+                  style={{
+                    objectFit: "contain",
+                    mixBlendMode: "normal",
+                    opacity: 0.95,
+                    filter: "contrast(1.08) brightness(1.02) saturate(1.05)",
+                    userSelect: "none",
+                  }}
+                />
+
+                {/* Fabric Integration Layer - Subtle Blending */}
+                <img
+                  src={design}
+                  alt="Fabric integration layer"
+                  className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
+                  draggable={false}
+                  style={{
+                    objectFit: "contain",
+                    mixBlendMode: "multiply",
+                    opacity: 0.15,
+                    filter: "blur(0.3px)",
+                    userSelect: "none",
+                  }}
+                />
+
+                {/* Realistic Ink Absorption Effect */}
+                <img
+                  src={design}
+                  alt="Ink absorption layer"
+                  className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
+                  draggable={false}
+                  style={{
+                    objectFit: "contain",
+                    mixBlendMode: "overlay",
+                    opacity: 0.25,
+                    filter: "blur(0.2px) brightness(0.95)",
+                    userSelect: "none",
+                  }}
+                />
+
+                {/* Subtle Shadow for Depth */}
+                <img
+                  src={design}
+                  alt="Shadow layer"
+                  className="w-full h-full object-contain rounded-sm select-none absolute inset-0 pointer-events-none"
+                  draggable={false}
+                  style={{
+                    objectFit: "contain",
+                    mixBlendMode: "multiply",
+                    opacity: 0.08,
+                    filter: "blur(1px) brightness(0.3)",
+                    transform: "translate(1px, 1px)",
+                    userSelect: "none",
+                  }}
+                />
+
+                {/* Rotation handle */}
+                <div
+                  onMouseDown={handleMouseDown}
+                  className="absolute -top-6 left-1/2 -translate-x-1/2 w-4 h-4 bg-indigo-400 rounded-full cursor-grab opacity-0 group-hover:opacity-100 transition"
+                  title="Rotate"
+                />
+              </div>
+            </Rnd>
+          )}
+        </div>
       </div>
     </div>
   );

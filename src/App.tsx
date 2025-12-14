@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link, Routes, Route } from 'react-router-dom';
 import { Sparkles, ShoppingCart } from 'lucide-react';
 import { AppProvider, useTshirtState, useDesignState } from './store/AppContext';
@@ -10,7 +10,7 @@ import ARTryOnPage from './pages/ar-tryon';
 
 function AppContent() {
   const { tshirtColor, setTshirtColor } = useTshirtState();
-  const { currentImage } = useDesignState();
+  const { currentImage, currentSide, switchSide } = useDesignState();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
@@ -77,12 +77,20 @@ function AppContent() {
                     <h2 className="text-lg font-semibold text-gray-800">Live Preview</h2>
                     <p className="text-sm text-gray-600">See your design in real-time</p>
                   </div>
-                  <div className="h-full">
+                  <div 
+                    className="h-full" 
+                    style={{
+                      background: 'transparent !important',
+                      backgroundColor: 'transparent !important'
+                    }}
+                  >
                     <TShirtMockup
                       color={tshirtColor}
                       design={currentImage}
                       material="cotton"
                       size="M"
+                      side={currentSide}
+                      onSideSwitch={switchSide}
                     />
                   </div>
                 </div>

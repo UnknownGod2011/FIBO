@@ -6542,20 +6542,20 @@ app.post("/api/test/complete-multi-edit", async (req, res) => {
  */
 app.post("/api/cart/add", async (req, res) => {
   try {
-    const { imageUrl, tshirtColor, design } = req.body;
+    const { frontDesign, backDesign, tshirtColor } = req.body;
     
-    if (!imageUrl) {
+    if (!frontDesign && !backDesign) {
       return res.status(400).json({
         success: false,
-        error: { message: "Image URL is required" }
+        error: { message: "At least one design (front or back) is required" }
       });
     }
 
     const cartItem = {
       id: Date.now().toString(),
-      imageUrl,
+      frontDesign: frontDesign || { imageUrl: null, design: 'No front design' },
+      backDesign: backDesign || { imageUrl: null, design: 'No back design' },
       tshirtColor: tshirtColor || '#000000',
-      design: design || 'Custom Design',
       addedAt: new Date().toISOString(),
       price: 29.99
     };
@@ -6564,7 +6564,7 @@ app.post("/api/cart/add", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Item added to cart successfully",
+      message: "T-shirt added to cart with both sides",
       cartItem
     });
 
@@ -7800,20 +7800,39 @@ app.post("/api/process-upload", async (req, res) => {
     const filename = `processed_${requestId}_${Date.now()}.png`;
     const localUrl = await downloadAndSaveImage(finalImageUrl, filename);
 
-    // Store generation data for potential refinements
+    // CRITICAL FIX: Create pseudo-structured prompt for uploaded designs to enable refinement
+    // This allows uploaded designs to be refined just like generated ones
+    const pseudoStructuredPrompt = JSON.stringify({
+      "prompt": "Uploaded design with transparent background",
+      "style": "clean design suitable for t-shirt printing",
+      "background": "transparent background",
+      "quality": "high resolution",
+      "type": "uploaded_design",
+      "refinement_compatible": true,
+      "original_source": "user_upload",
+      "processing_applied": [
+        "background_removal",
+        maskCleanupSuccess ? "mask_cleanup" : null,
+        enhanceSuccess ? "enhancement" : null,
+        additionalUpscaleSuccess ? "resolution_boost" : null
+      ].filter(Boolean)
+    });
+
+    // Store generation data for potential refinements - now refinement-compatible
     const generationData = {
       request_id: requestId,
       upload_request_id: requestId,
-      original_prompt: 'Uploaded design with background removed',
-      enhanced_prompt: 'Processed uploaded design with transparent background',
-      structured_prompt: null,
-      seed: null,
+      original_prompt: 'Uploaded design with background removed and enhanced',
+      enhanced_prompt: 'Processed uploaded design with transparent background, ready for refinement',
+      structured_prompt: pseudoStructuredPrompt, // CRITICAL: Now has structured prompt for refinement
+      seed: `upload_${Date.now()}`, // Pseudo-seed for consistency
       image_url: finalImageUrl,
       local_url: localUrl,
       has_transparent_bg: true,
       background_context: backgroundContext,
       is_upload_processed: true,
-      processing_method: 'background_removal',
+      processing_method: 'advanced_background_removal_with_enhancement',
+      refinement_enabled: true, // Flag to indicate refinement is supported
       created_at: new Date().toISOString()
     };
     
@@ -7828,7 +7847,7 @@ app.post("/api/process-upload", async (req, res) => {
 
     res.json({
       success: true,
-      message: `Advanced processing completed: background removal${maskCleanupSuccess ? ' + mask cleanup' : ''}${enhanceSuccess ? ' + enhancement' : ''}${additionalUpscaleSuccess ? ' + max resolution' : ''}`,
+      message: `Advanced processing completed: background removal${maskCleanupSuccess ? ' + mask cleanup' : ''}${enhanceSuccess ? ' + enhancement' : ''}${additionalUpscaleSuccess ? ' + max resolution' : ''} + refinement enabled`,
       imageUrl: localUrl,
       originalUrl: finalImageUrl,
       requestId: requestId,
@@ -7840,11 +7859,14 @@ app.post("/api/process-upload", async (req, res) => {
       enhanced: enhanceSuccess,
       maxResolution: additionalUpscaleSuccess,
       preservesOriginalDesign: true,
+      refinementEnabled: true, // CRITICAL: Indicate refinement is now supported
+      structured_prompt: "generated", // Indicate structured prompt is available
       processingSteps: [
         'background_removal_with_advanced_params',
         maskCleanupSuccess ? 'mask_based_cleanup' : null,
         'enhancement_with_upscaling',
-        additionalUpscaleSuccess ? 'additional_resolution_boost' : null
+        additionalUpscaleSuccess ? 'additional_resolution_boost' : null,
+        'refinement_compatibility_added'
       ].filter(Boolean)
     });
 

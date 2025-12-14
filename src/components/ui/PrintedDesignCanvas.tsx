@@ -22,7 +22,9 @@ const PrintedDesignCanvas: React.FC<PrintedDesignCanvasProps> = ({
     // Ensure a transparent canvas every render.
     canvas.width = width;
     canvas.height = height;
-    ctx.clearRect(0, 0, width, height);
+    canvas.style.background = "transparent";
+    canvas.style.backgroundColor = "transparent";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -68,7 +70,8 @@ const PrintedDesignCanvas: React.FC<PrintedDesignCanvasProps> = ({
       height={height}
       style={{
         display: "block",
-        backgroundColor: "transparent", // important: no box
+        background: "transparent !important",
+        backgroundColor: "transparent !important"
       }}
     />
   );

@@ -1,28 +1,42 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
 // Types
+export interface DesignData {
+  generatedImage: string | null;
+  refinedImage: string | null;
+  currentImage: string | null;
+  lastPrompt: string;
+  lastRefinementPrompt: string;
+  canRefine: boolean;
+  hasGenerated: boolean;
+}
+
 export interface CartItem {
   id: string;
-  imageUrl: string;
+  frontDesign: {
+    imageUrl: string | null;
+    design: string;
+  };
+  backDesign: {
+    imageUrl: string | null;
+    design: string;
+  };
   tshirtColor: string;
-  design: string;
   addedAt: string;
   price: number;
 }
 
 export interface AppState {
-  // Design state
-  generatedImage: string | null;
-  refinedImage: string | null;
-  currentImage: string | null; // The currently displayed image (generated or refined)
-  lastPrompt: string;
-  lastRefinementPrompt: string;
+  // Front & Back Design state (CRITICAL: Completely separate)
+  frontDesign: DesignData;
+  backDesign: DesignData;
+  
+  // Current view state
+  currentSide: 'front' | 'back';
   
   // UI state
   isGenerating: boolean;
   isRefining: boolean;
-  canRefine: boolean;
-  hasGenerated: boolean;
   
   // T-shirt state
   tshirtColor: string;
@@ -40,13 +54,14 @@ export interface AppState {
 export type AppAction =
   | { type: 'SET_GENERATING'; payload: boolean }
   | { type: 'SET_REFINING'; payload: boolean }
-  | { type: 'SET_GENERATED_IMAGE'; payload: string }
-  | { type: 'SET_REFINED_IMAGE'; payload: string }
-  | { type: 'SET_CURRENT_IMAGE'; payload: string }
-  | { type: 'SET_LAST_PROMPT'; payload: string }
-  | { type: 'SET_LAST_REFINEMENT_PROMPT'; payload: string }
-  | { type: 'SET_CAN_REFINE'; payload: boolean }
-  | { type: 'SET_HAS_GENERATED'; payload: boolean }
+  | { type: 'SET_GENERATED_IMAGE'; payload: { side: 'front' | 'back'; url: string } }
+  | { type: 'SET_REFINED_IMAGE'; payload: { side: 'front' | 'back'; url: string } }
+  | { type: 'SET_CURRENT_IMAGE'; payload: { side: 'front' | 'back'; url: string } }
+  | { type: 'SET_LAST_PROMPT'; payload: { side: 'front' | 'back'; prompt: string } }
+  | { type: 'SET_LAST_REFINEMENT_PROMPT'; payload: { side: 'front' | 'back'; prompt: string } }
+  | { type: 'SET_CAN_REFINE'; payload: { side: 'front' | 'back'; canRefine: boolean } }
+  | { type: 'SET_HAS_GENERATED'; payload: { side: 'front' | 'back'; hasGenerated: boolean } }
+  | { type: 'SWITCH_SIDE'; payload: 'front' | 'back' }
   | { type: 'SET_TSHIRT_COLOR'; payload: string }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_SUCCESS'; payload: string | null }
@@ -54,20 +69,27 @@ export type AppAction =
   | { type: 'ADD_TO_CART'; payload: CartItem }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'LOAD_CART_ITEMS'; payload: CartItem[] }
-  | { type: 'RESET_DESIGN_STATE' }
+  | { type: 'RESET_DESIGN_STATE'; payload?: 'front' | 'back' | 'both' }
   | { type: 'LOAD_PERSISTED_STATE'; payload: Partial<AppState> };
 
-// Initial state
-const initialState: AppState = {
+// Initial design data
+const initialDesignData: DesignData = {
   generatedImage: null,
   refinedImage: null,
   currentImage: null,
   lastPrompt: '',
   lastRefinementPrompt: '',
-  isGenerating: false,
-  isRefining: false,
   canRefine: false,
   hasGenerated: false,
+};
+
+// Initial state
+const initialState: AppState = {
+  frontDesign: { ...initialDesignData },
+  backDesign: { ...initialDesignData },
+  currentSide: 'front',
+  isGenerating: false,
+  isRefining: false,
   tshirtColor: '#000000',
   cartItems: [],
   error: null,
@@ -85,35 +107,81 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, isRefining: action.payload };
     
     case 'SET_GENERATED_IMAGE':
+      const sideForGenerated = action.payload.side;
       return { 
         ...state, 
-        generatedImage: action.payload,
-        currentImage: action.payload,
-        hasGenerated: true,
-        canRefine: true
+        [sideForGenerated + 'Design']: {
+          ...state[sideForGenerated + 'Design' as keyof AppState] as DesignData,
+          generatedImage: action.payload.url,
+          currentImage: action.payload.url,
+          hasGenerated: true,
+          canRefine: true
+        }
       };
     
     case 'SET_REFINED_IMAGE':
+      const sideForRefined = action.payload.side;
       return { 
         ...state, 
-        refinedImage: action.payload,
-        currentImage: action.payload
+        [sideForRefined + 'Design']: {
+          ...state[sideForRefined + 'Design' as keyof AppState] as DesignData,
+          refinedImage: action.payload.url,
+          currentImage: action.payload.url
+        }
       };
     
     case 'SET_CURRENT_IMAGE':
-      return { ...state, currentImage: action.payload };
+      const sideForCurrent = action.payload.side;
+      return { 
+        ...state, 
+        [sideForCurrent + 'Design']: {
+          ...state[sideForCurrent + 'Design' as keyof AppState] as DesignData,
+          currentImage: action.payload.url
+        }
+      };
     
     case 'SET_LAST_PROMPT':
-      return { ...state, lastPrompt: action.payload };
+      const sideForPrompt = action.payload.side;
+      return { 
+        ...state, 
+        [sideForPrompt + 'Design']: {
+          ...state[sideForPrompt + 'Design' as keyof AppState] as DesignData,
+          lastPrompt: action.payload.prompt
+        }
+      };
     
     case 'SET_LAST_REFINEMENT_PROMPT':
-      return { ...state, lastRefinementPrompt: action.payload };
+      const sideForRefinement = action.payload.side;
+      return { 
+        ...state, 
+        [sideForRefinement + 'Design']: {
+          ...state[sideForRefinement + 'Design' as keyof AppState] as DesignData,
+          lastRefinementPrompt: action.payload.prompt
+        }
+      };
     
     case 'SET_CAN_REFINE':
-      return { ...state, canRefine: action.payload };
+      const sideForRefine = action.payload.side;
+      return { 
+        ...state, 
+        [sideForRefine + 'Design']: {
+          ...state[sideForRefine + 'Design' as keyof AppState] as DesignData,
+          canRefine: action.payload.canRefine
+        }
+      };
     
     case 'SET_HAS_GENERATED':
-      return { ...state, hasGenerated: action.payload };
+      const sideForGenerate = action.payload.side;
+      return { 
+        ...state, 
+        [sideForGenerate + 'Design']: {
+          ...state[sideForGenerate + 'Design' as keyof AppState] as DesignData,
+          hasGenerated: action.payload.hasGenerated
+        }
+      };
+    
+    case 'SWITCH_SIDE':
+      return { ...state, currentSide: action.payload };
     
     case 'SET_TSHIRT_COLOR':
       return { ...state, tshirtColor: action.payload };
@@ -142,21 +210,29 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, cartItems: action.payload };
     
     case 'RESET_DESIGN_STATE':
-      return {
-        ...state,
-        generatedImage: null,
-        refinedImage: null,
-        currentImage: null,
-        lastPrompt: '',
-        lastRefinementPrompt: '',
-        isGenerating: false,
-        isRefining: false,
-        canRefine: false,
-        hasGenerated: false,
-        error: null,
-        success: null,
-        generationProgress: '',
-      };
+      const resetSide = action.payload || 'both';
+      if (resetSide === 'both') {
+        return {
+          ...state,
+          frontDesign: { ...initialDesignData },
+          backDesign: { ...initialDesignData },
+          isGenerating: false,
+          isRefining: false,
+          error: null,
+          success: null,
+          generationProgress: '',
+        };
+      } else {
+        return {
+          ...state,
+          [resetSide + 'Design']: { ...initialDesignData },
+          isGenerating: false,
+          isRefining: false,
+          error: null,
+          success: null,
+          generationProgress: '',
+        };
+      }
     
     case 'LOAD_PERSISTED_STATE':
       return { ...state, ...action.payload };
@@ -206,24 +282,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Persist design state whenever it changes
   useEffect(() => {
     const designState = {
-      generatedImage: state.generatedImage,
-      refinedImage: state.refinedImage,
-      currentImage: state.currentImage,
-      lastPrompt: state.lastPrompt,
-      lastRefinementPrompt: state.lastRefinementPrompt,
-      canRefine: state.canRefine,
-      hasGenerated: state.hasGenerated,
+      frontDesign: state.frontDesign,
+      backDesign: state.backDesign,
+      currentSide: state.currentSide,
     };
     
     localStorage.setItem('designState', JSON.stringify(designState));
   }, [
-    state.generatedImage,
-    state.refinedImage,
-    state.currentImage,
-    state.lastPrompt,
-    state.lastRefinementPrompt,
-    state.canRefine,
-    state.hasGenerated,
+    state.frontDesign,
+    state.backDesign,
+    state.currentSide,
   ]);
 
   // Persist T-shirt color
@@ -250,32 +318,45 @@ export function useAppContext() {
 // Helper hooks for specific functionality
 export function useDesignState() {
   const { state, dispatch } = useAppContext();
+  const currentDesign = state.currentSide === 'front' ? state.frontDesign : state.backDesign;
   
   return {
-    generatedImage: state.generatedImage,
-    refinedImage: state.refinedImage,
-    currentImage: state.currentImage,
-    lastPrompt: state.lastPrompt,
-    lastRefinementPrompt: state.lastRefinementPrompt,
-    canRefine: state.canRefine,
-    hasGenerated: state.hasGenerated,
+    // Current side design data
+    generatedImage: currentDesign.generatedImage,
+    refinedImage: currentDesign.refinedImage,
+    currentImage: currentDesign.currentImage,
+    lastPrompt: currentDesign.lastPrompt,
+    lastRefinementPrompt: currentDesign.lastRefinementPrompt,
+    canRefine: currentDesign.canRefine,
+    hasGenerated: currentDesign.hasGenerated,
+    
+    // Global UI state
     isGenerating: state.isGenerating,
     isRefining: state.isRefining,
     error: state.error,
     success: state.success,
     generationProgress: state.generationProgress,
     
+    // Current side info
+    currentSide: state.currentSide,
+    
+    // All design data (for cart, etc.)
+    frontDesign: state.frontDesign,
+    backDesign: state.backDesign,
+    
+    // Actions (automatically target current side)
     setGenerating: (value: boolean) => dispatch({ type: 'SET_GENERATING', payload: value }),
     setRefining: (value: boolean) => dispatch({ type: 'SET_REFINING', payload: value }),
-    setGeneratedImage: (url: string) => dispatch({ type: 'SET_GENERATED_IMAGE', payload: url }),
-    setRefinedImage: (url: string) => dispatch({ type: 'SET_REFINED_IMAGE', payload: url }),
-    setCurrentImage: (url: string) => dispatch({ type: 'SET_CURRENT_IMAGE', payload: url }),
-    setLastPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_PROMPT', payload: prompt }),
-    setLastRefinementPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_REFINEMENT_PROMPT', payload: prompt }),
+    setGeneratedImage: (url: string) => dispatch({ type: 'SET_GENERATED_IMAGE', payload: { side: state.currentSide, url } }),
+    setRefinedImage: (url: string) => dispatch({ type: 'SET_REFINED_IMAGE', payload: { side: state.currentSide, url } }),
+    setCurrentImage: (url: string) => dispatch({ type: 'SET_CURRENT_IMAGE', payload: { side: state.currentSide, url } }),
+    setLastPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_PROMPT', payload: { side: state.currentSide, prompt } }),
+    setLastRefinementPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_REFINEMENT_PROMPT', payload: { side: state.currentSide, prompt } }),
     setError: (error: string | null) => dispatch({ type: 'SET_ERROR', payload: error }),
     setSuccess: (success: string | null) => dispatch({ type: 'SET_SUCCESS', payload: success }),
     setGenerationProgress: (progress: string) => dispatch({ type: 'SET_GENERATION_PROGRESS', payload: progress }),
-    resetDesignState: () => dispatch({ type: 'RESET_DESIGN_STATE' }),
+    switchSide: (side: 'front' | 'back') => dispatch({ type: 'SWITCH_SIDE', payload: side }),
+    resetDesignState: (side?: 'front' | 'back' | 'both') => dispatch({ type: 'RESET_DESIGN_STATE', payload: side }),
   };
 }
 

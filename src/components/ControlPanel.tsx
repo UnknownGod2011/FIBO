@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { ShoppingCart, Loader2, Plus, Upload } from 'lucide-react';
+import { ShoppingCart, Loader2, Plus } from 'lucide-react';
 import ColorWheel from './ColorWheel';
 import { useDesignState, useCartState, CartItem } from '../store/AppContext';
 
@@ -31,13 +31,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   // Global state from context
   const {
     currentImage,
-    lastPrompt,
     isGenerating,
     isRefining,
     canRefine,
     error,
     success,
     generationProgress,
+    frontDesign,
+    backDesign,
     setGenerating,
     setRefining,
     setGeneratedImage,
@@ -71,7 +72,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         // Set preview immediately
         setUploadedDesign(imageDataUrl);
         
-        setGenerationProgress('Advanced processing: background removal → mask cleanup → enhancement → max resolution...');
+        setGenerationProgress('Processing design...');
         
         try {
           // Call backend to enhance and remove background
@@ -174,8 +175,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     setGenerationProgress('Starting generation...');
     
     try {
-      setGenerationProgress('Sending request to Bria API...');
-
       // Call new Bria API
       const response = await fetch(`${API_BASE}/generate`, {
         method: "POST",
@@ -223,8 +222,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     setGenerationProgress('Starting refinement...');
     
     try {
-      setGenerationProgress('Sending refinement request...');
-
       // Call new Bria refinement API
       const response = await fetch(`${API_BASE}/refine`, {
         method: "POST",
@@ -264,18 +261,24 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
 
   const handleAddToCart = async () => {
-    if (!currentImage) {
-      setError("Please generate a design first");
+    if (!frontDesign.currentImage && !backDesign.currentImage) {
+      setError("Please generate at least one design (front or back)");
       return;
     }
 
     try {
-      // Create cart item with global state
+      // Create cart item with both front and back designs
       const cartItem: CartItem = {
         id: Date.now().toString(),
-        imageUrl: currentImage,
+        frontDesign: {
+          imageUrl: frontDesign.currentImage,
+          design: frontDesign.lastPrompt || 'No front design'
+        },
+        backDesign: {
+          imageUrl: backDesign.currentImage,
+          design: backDesign.lastPrompt || 'No back design'
+        },
         tshirtColor,
-        design: lastPrompt || 'Custom Design',
         addedAt: new Date().toISOString(),
         price: 29.99
       };
@@ -288,14 +291,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageUrl: currentImage,
-          tshirtColor,
-          design: lastPrompt || 'Custom Design'
+          frontDesign: {
+            imageUrl: frontDesign.currentImage,
+            design: frontDesign.lastPrompt || 'No front design'
+          },
+          backDesign: {
+            imageUrl: backDesign.currentImage,
+            design: backDesign.lastPrompt || 'No back design'
+          },
+          tshirtColor
         }),
       });
 
       await handleApiResponse(response);
-      setSuccess('✅ Item added to cart successfully!');
+      setSuccess('✅ T-shirt added to cart with both sides!');
       setTimeout(() => setSuccess(null), 3000);
       
     } catch (err: any) {
@@ -306,39 +315,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Design Upload Section */}
-      <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      {/* Design Upload Section - One Horizontal Line */}
+      <div className="flex items-center space-x-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <span className="text-sm font-medium text-gray-700">Add your design</span>
         
+        {/* From File Option */}
         <div className="flex items-center space-x-2">
-          {/* File Upload Button */}
+          <span className="text-xs text-gray-600">From file</span>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessingUpload || isGenerating || isRefining}
-            className="flex items-center justify-center w-8 h-8 bg-white border border-gray-300 rounded-full hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center w-6 h-6 bg-white border border-gray-300 rounded-full hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
             title="Upload from file"
           >
-            {isProcessingUpload ? (
-              <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
-            ) : (
-              <Plus className="w-4 h-4 text-gray-600" />
-            )}
-          </button>
-          
-          {/* Clipboard Paste Button */}
-          <button
-            onClick={handleClipboardPaste}
-            disabled={isProcessingUpload || isGenerating || isRefining}
-            className="flex items-center justify-center w-8 h-8 bg-white border border-gray-300 rounded-full hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Paste from clipboard"
-          >
-            <Upload className="w-4 h-4 text-gray-600" />
+            <Plus className="w-3 h-3 text-gray-600 group-hover:text-gray-800" />
           </button>
         </div>
         
-        {/* Processing Status */}
+        {/* From Clipboard Option */}
+        <div className="flex items-center space-x-2">
+          <span className="text-xs text-gray-600">From clipboard</span>
+          <button
+            onClick={handleClipboardPaste}
+            disabled={isProcessingUpload || isGenerating || isRefining}
+            className="flex items-center justify-center w-6 h-6 bg-white border border-gray-300 rounded-full hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+            title="Paste from clipboard"
+          >
+            <Plus className="w-3 h-3 text-gray-600 group-hover:text-gray-800" />
+          </button>
+        </div>
+        
+        {/* Inline Processing Status */}
         {isProcessingUpload && (
-          <span className="text-xs text-blue-600">Extracting design...</span>
+          <div className="flex items-center space-x-2">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+            <span className="text-xs text-blue-600">Processing...</span>
+          </div>
         )}
         
         {/* Hidden file input */}
