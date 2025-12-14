@@ -8,7 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-
     "start:openai": "node backend/index.openai.js",
     "dev:openai": "nodemon backend/index.openai.js",
     "start:bria": "node backend/index.fibo.js",
@@ -16,7 +15,9 @@
     "start:fibo": "node backend/index.fibo.js",
     "dev:fibo": "nodemon backend/index.fibo.js",
     "start": "concurrently \"npm run start:bria\" \"npm run dev:frontend\"",
-    "dev": "concurrently \"npm run dev:bria\" \"npm run dev:frontend\""
+    "dev": "concurrently \"npm run dev:bria\" \"npm run dev:frontend\"",
+    "deploy:backend": "echo 'Deploy backend to Render manually'",
+    "deploy:frontend": "vercel --prod"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

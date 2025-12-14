@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: crishirts-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.fibo.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false
+      - key: BRIA_API_TOKEN
+        sync: false

@@ -8,7 +8,7 @@ interface ControlPanelProps {
   onTshirtColorChange: (color: string) => void;
 }
 
-const API_BASE = "http://localhost:5001/api";
+const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 
 const PRESET_COLORS = [
   '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF',
@@ -92,12 +92,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           const data = await handleApiResponse(response);
           
           setGenerationProgress('');
-          setSuccess('✅ Design created with your exact brand colors!');
+          setSuccess('✅ Enhanced design created with professional colors!');
           setTimeout(() => setSuccess(null), 3000);
           
           // Update global state with generated design
           setGeneratedImage(data.imageUrl);
-          setLastPrompt(`Brand-colored design: ${prompt}`);
+          setLastPrompt(`Enhanced design: ${prompt}`);
           
           // Clear the prompt since it was used
           setPrompt('');
@@ -155,12 +155,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           const data = await handleApiResponse(response);
           
           setGenerationProgress('');
-          setSuccess('✅ Professional design created from your sketch!');
+          setSuccess('✅ Enhanced professional design created!');
           setTimeout(() => setSuccess(null), 3000);
           
           // Update global state with generated design
           setGeneratedImage(data.imageUrl);
-          setLastPrompt(`Professional design from sketch: ${prompt}`);
+          setLastPrompt(`Enhanced professional design: ${prompt}`);
           
           // Clear the prompt since it was used
           setPrompt('');
@@ -574,22 +574,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </button>
         </div>
         
-        {/* Your Sketch Option */}
+        {/* Enhanced Design Option */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600">Your sketch</span>
+          <span className="text-xs text-gray-600">Enhanced design</span>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessingUpload || isGenerating || isRefining}
             className="flex items-center justify-center w-6 h-6 bg-purple-100 border border-purple-300 rounded-full hover:bg-purple-200 hover:border-purple-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
-            title="Upload sketch for professional design"
+            title="Upload a sketch for enhanced professional design generation (requires prompt first)"
           >
             <Plus className="w-3 h-3 text-purple-600 group-hover:text-purple-800" />
           </button>
         </div>
         
-        {/* Brand Colors Option */}
+        {/* Enhanced Colors Option */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600">Brand colors</span>
+          <span className="text-xs text-gray-600">Enhanced colors</span>
           <button
             onClick={() => {
               const input = document.createElement('input');
@@ -603,7 +603,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             }}
             disabled={isProcessingUpload || isGenerating || isRefining}
             className="flex items-center justify-center w-6 h-6 bg-green-100 border border-green-300 rounded-full hover:bg-green-200 hover:border-green-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
-            title="Upload logo to extract brand colors"
+            title="Upload your brand image for enhanced professional color schemes"
           >
             <Plus className="w-3 h-3 text-green-600 group-hover:text-green-800" />
           </button>
@@ -663,7 +663,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           onClick={() => setVectorMode(true)}
           className={`px-3 py-1 text-xs rounded ${vectorMode ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
         >
-          Vector (SVG) - Print Ready
+          Minimalist Style
         </button>
       </div>
 
@@ -687,7 +687,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Generating...</span>
             </div>
-          ) : `Generate ${vectorMode ? 'Vector' : 'Design'}`}
+          ) : `Generate ${vectorMode ? 'Minimalist' : 'Design'}`}
         </button>
       </div>
 

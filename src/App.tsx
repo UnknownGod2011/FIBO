@@ -6,7 +6,7 @@ import TShirtMockup from './components/TShirtMockup';
 import ControlPanel from './components/ControlPanel';
 import Collection from './pages/collection';
 import Cart from './pages/cart';
-import VRTryOnPage from './pages/vr-tryon';
+import VRTryOnPage from './pages/vr-tryon.tsx';
 
 function AppContent() {
   const { tshirtColor, setTshirtColor } = useTshirtState();

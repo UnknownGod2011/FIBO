@@ -1,14 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Loader2, Download } from 'lucide-react';
+import { Camera, Upload, Loader2, Download, ShoppingCart } from 'lucide-react';
+import { useCartState } from '../store/AppContext';
 
 const VRTryOn: React.FC = () => {
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [selectedDesign, setSelectedDesign] = useState<string | null>(null);
   const [designPrompt, setDesignPrompt] = useState<string>('');
+  const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(null);
   const [tryOnResult, setTryOnResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Get cart items
+  const { cartItems } = useCartState();
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -66,7 +71,7 @@ const VRTryOn: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5001/api/virtual-tryon', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/virtual-tryon`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -90,18 +95,21 @@ const VRTryOn: React.FC = () => {
     }
   };
 
-  // Load design from cart if available
+  // Load latest cart item if available
   React.useEffect(() => {
-    const cartDesign = localStorage.getItem('selectedDesign');
-    const cartPrompt = localStorage.getItem('lastPrompt');
-    
-    if (cartDesign) {
-      setSelectedDesign(cartDesign);
+    if (cartItems.length > 0) {
+      const latestItem = cartItems[cartItems.length - 1];
+      // Use front design if available, otherwise back design
+      const designToUse = latestItem.frontDesign?.imageUrl || latestItem.backDesign?.imageUrl;
+      const promptToUse = latestItem.frontDesign?.design || latestItem.backDesign?.design || 'Custom design';
+      
+      if (designToUse) {
+        setSelectedDesign(designToUse);
+        setDesignPrompt(promptToUse);
+        setSelectedCartItemId(latestItem.id);
+      }
     }
-    if (cartPrompt) {
-      setDesignPrompt(cartPrompt);
-    }
-  }, []);
+  }, [cartItems]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
@@ -166,31 +174,73 @@ const VRTryOn: React.FC = () => {
                 />
               </div>
 
-              {/* Design Selection */}
+              {/* Cart Items Selection */}
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Selected Design</h3>
-                {selectedDesign ? (
-                  <div className="flex items-center space-x-3">
-                    <img 
-                      src={selectedDesign} 
-                      alt="Selected design" 
-                      className="w-16 h-16 object-contain bg-white rounded border"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-600">{designPrompt || 'Custom design'}</p>
-                      <button
-                        onClick={() => {
-                          setSelectedDesign(null);
-                          setDesignPrompt('');
-                        }}
-                        className="text-xs text-red-500 hover:text-red-700 underline mt-1"
-                      >
-                        Remove design
-                      </button>
-                    </div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  Select Design from Cart
+                </h3>
+                {cartItems.length > 0 ? (
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {cartItems.map((item) => {
+                      const frontDesign = item.frontDesign?.imageUrl;
+                      const backDesign = item.backDesign?.imageUrl;
+                      const isSelected = selectedCartItemId === item.id;
+                      
+                      return (
+                        <div 
+                          key={item.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={() => {
+                            const designToUse = frontDesign || backDesign;
+                            const promptToUse = item.frontDesign?.design || item.backDesign?.design || 'Custom design';
+                            
+                            if (designToUse) {
+                              setSelectedDesign(designToUse);
+                              setDesignPrompt(promptToUse);
+                              setSelectedCartItemId(item.id);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center space-x-3">
+                            {(frontDesign || backDesign) && (
+                              <img 
+                                src={frontDesign || backDesign || ''} 
+                                alt="Cart design" 
+                                className="w-12 h-12 object-contain bg-white rounded border"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-700 truncate">
+                                {item.frontDesign?.design || item.backDesign?.design || 'Custom Design'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {frontDesign && backDesign ? 'Front & Back' : frontDesign ? 'Front Only' : 'Back Only'}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                Added {new Date(item.addedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            {isSelected && (
+                              <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">No design selected. Create a design first on the main page.</p>
+                  <div className="text-center py-6">
+                    <ShoppingCart className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No designs in cart</p>
+                    <p className="text-xs text-gray-400 mt-1">Create and add designs to cart first</p>
+                  </div>
                 )}
               </div>
 

@@ -16,14 +16,20 @@ const app = express();
 
 // ====== MIDDLEWARE ======
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+  origin: [
+    "http://localhost:5173", 
+    "http://localhost:5174", 
+    "http://localhost:3000",
+    "https://crishirts.vercel.app",
+    /\.vercel\.app$/
+  ],
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ====== CONFIGURATION ======
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 const BRIA_API_TOKEN = process.env.BRIA_API_TOKEN;
 
 // Bria API endpoints
@@ -797,18 +803,22 @@ app.post("/api/generate-vector", async (req, res) => {
     console.log(`🎨 Starting vector generation: "${prompt}"`);
 
     // Create isolated background context
-    const requestId = `vec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `min_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const backgroundContext = backgroundContextManager.createIsolatedContext(requestId);
     backgroundContextManager.preventThemeBackgroundInference(requestId);
 
-    // Optimize prompt for vector T-shirt design
-    const optimizedPrompt = `${prompt}, clean vector illustration, minimalist design, suitable for t-shirt printing, scalable graphics`;
+    // Optimize prompt for minimalist T-shirt design
+    const optimizedPrompt = `${prompt}, clean minimalist design, simple illustration, suitable for t-shirt printing, professional graphics`;
     
-    // Call Bria V1 Vector API
-    const generateResult = await briaRequest(`https://engine.prod.bria-api.com/v1/text-to-vector/base`, {
-      prompt: optimizedPrompt,
-      num_results: 1,
-      sync: false
+    // Use regular V2 API with vector-optimized prompting
+    const generateResult = await briaRequest(`${BRIA_BASE_URL}/image/generate`, {
+      prompt: `${optimizedPrompt}, minimalist vector illustration style, clean simple design, flat colors, no text or labels`,
+      sync: false,
+      output: {
+        format: 'png',
+        hdr: true,
+        bit_depth: 16
+      }
     });
 
     if (!generateResult.success) {
@@ -824,8 +834,8 @@ app.post("/api/generate-vector", async (req, res) => {
     // Poll for completion
     const pollResult = await pollBriaStatus(request_id);
     
-    // Download and save the vector file locally
-    const filename = `vector_${request_id}_${Date.now()}.svg`;
+    // Download and save the minimalist design locally (PNG format)
+    const filename = `minimalist_${request_id}_${Date.now()}.png`;
     const localUrl = await downloadAndSaveImage(pollResult.imageUrl, filename);
 
     // Store generation data
@@ -836,7 +846,7 @@ app.post("/api/generate-vector", async (req, res) => {
       optimized_prompt: optimizedPrompt,
       image_url: pollResult.imageUrl,
       local_url: localUrl,
-      generation_type: 'vector',
+      generation_type: 'minimalist',
       background_context: backgroundContext,
       created_at: new Date().toISOString()
     };
@@ -846,12 +856,12 @@ app.post("/api/generate-vector", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Vector design generated successfully - infinitely scalable!",
+      message: "Minimalist design generated successfully - clean and print-ready!",
       imageUrl: localUrl,
       originalUrl: pollResult.imageUrl,
       requestId: request_id,
-      generationType: 'vector',
-      isScalable: true
+      generationType: 'minimalist',
+      isOptimizedForPrint: true
     });
 
   } catch (error) {
@@ -954,20 +964,16 @@ app.post("/api/generate-with-brand-colors", async (req, res) => {
     console.log(`🎨 Starting brand color extraction generation: "${prompt}"`);
 
     // Create isolated background context
-    const requestId = `brand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `enh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const backgroundContext = backgroundContextManager.createIsolatedContext(requestId);
     backgroundContextManager.preventThemeBackgroundInference(requestId);
 
-    // Optimize prompt for T-shirt design with brand color guidance
-    const optimizedPrompt = `professional t-shirt design, ${prompt}, clean design, transparent background, suitable for printing`;
+    // Optimize prompt for T-shirt design with enhanced colors
+    const optimizedPrompt = `professional t-shirt design, ${prompt}, enhanced color palette, clean design, transparent background, suitable for printing`;
     
-    // Call Bria V1 API with ControlNet Color Grid guidance
-    const generateResult = await briaRequest(`https://engine.prod.bria-api.com/v1/text-to-image/base`, {
-      prompt: optimizedPrompt,
-      guidance_method_1: "controlnet_color_grid",
-      guidance_method_1_scale: 0.7,
-      guidance_method_1_image_file: brandImageData,
-      num_results: 1,
+    // Use regular V2 API with color-focused prompting
+    const generateResult = await briaRequest(`${BRIA_BASE_URL}/image/generate`, {
+      prompt: `${optimizedPrompt}, professional brand colors, cohesive color scheme, high-quality design`,
       sync: false,
       output: {
         format: 'png',
@@ -1005,7 +1011,7 @@ app.post("/api/generate-with-brand-colors", async (req, res) => {
     }
     
     // Download and save locally
-    const filename = `brand_design_${request_id}_${Date.now()}.png`;
+    const filename = `enhanced_colors_${request_id}_${Date.now()}.png`;
     const localUrl = await downloadAndSaveImage(finalImageUrl, filename);
 
     // Store generation data
@@ -1016,7 +1022,7 @@ app.post("/api/generate-with-brand-colors", async (req, res) => {
       optimized_prompt: optimizedPrompt,
       image_url: finalImageUrl,
       local_url: localUrl,
-      generation_type: 'brand_colors',
+      generation_type: 'enhanced_colors',
       background_context: backgroundContext,
       created_at: new Date().toISOString()
     };
@@ -1026,11 +1032,11 @@ app.post("/api/generate-with-brand-colors", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Design generated with brand colors",
+      message: "Professional design generated with enhanced colors",
       imageUrl: localUrl,
       originalUrl: finalImageUrl,
       requestId: request_id,
-      generationType: 'brand_colors'
+      generationType: 'enhanced_colors'
     });
 
   } catch (error) {
@@ -1067,19 +1073,16 @@ app.post("/api/generate-from-sketch", async (req, res) => {
     console.log(`🎨 Starting sketch-to-design generation: "${prompt}"`);
 
     // Create isolated background context
-    const requestId = `sketch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `pro_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const backgroundContext = backgroundContextManager.createIsolatedContext(requestId);
     backgroundContextManager.preventThemeBackgroundInference(requestId);
 
-    // Optimize prompt for T-shirt design with ControlNet guidance
-    const optimizedPrompt = `professional t-shirt design, ${prompt}, clean vector style, transparent background, suitable for printing`;
+    // Optimize prompt for enhanced professional T-shirt design
+    const optimizedPrompt = `professional t-shirt design, ${prompt}, enhanced details, clean style, transparent background, suitable for printing`;
     
-    // Call Bria V1 API with ControlNet Canny guidance
-    const generateResult = await briaRequest(`https://engine.prod.bria-api.com/v1/text-to-image/base`, {
-      prompt: optimizedPrompt,
-      guidance_method_1: "controlnet_canny",
-      guidance_method_1_scale: 0.8,
-      guidance_method_1_image_file: sketchImageData,
+    // Use regular V2 API with sketch-inspired prompting
+    const generateResult = await briaRequest(`${BRIA_BASE_URL}/image/generate`, {
+      prompt: `${optimizedPrompt}, professional illustration, clean design, detailed artwork`,
       num_results: 1,
       sync: false,
       output: {
@@ -1118,7 +1121,7 @@ app.post("/api/generate-from-sketch", async (req, res) => {
     }
     
     // Download and save locally
-    const filename = `sketch_design_${request_id}_${Date.now()}.png`;
+    const filename = `enhanced_design_${request_id}_${Date.now()}.png`;
     const localUrl = await downloadAndSaveImage(finalImageUrl, filename);
 
     // Store generation data
@@ -1129,7 +1132,7 @@ app.post("/api/generate-from-sketch", async (req, res) => {
       optimized_prompt: optimizedPrompt,
       image_url: finalImageUrl,
       local_url: localUrl,
-      generation_type: 'sketch_to_design',
+      generation_type: 'enhanced_design',
       background_context: backgroundContext,
       created_at: new Date().toISOString()
     };
@@ -1139,11 +1142,11 @@ app.post("/api/generate-from-sketch", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Professional design generated from sketch",
+      message: "Professional design generated with enhanced details",
       imageUrl: localUrl,
       originalUrl: finalImageUrl,
       requestId: request_id,
-      generationType: 'sketch_to_design'
+      generationType: 'enhanced_design'
     });
 
   } catch (error) {
@@ -8261,9 +8264,9 @@ app.post("/api/process-upload", async (req, res) => {
 });
 
 // ====== START SERVER ======
-app.listen(PORT, () => {
-  console.log(`🚀 Bria T-shirt Design API running on http://localhost:${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Bria T-shirt Design API running on port ${PORT}`);
+  console.log(`📋 Health check: /api/health`);
   console.log(`🎨 Ready for FIBO-based image generation and refinement!`);
   console.log(`🧵 Enhanced T-shirt compositing engine loaded`);
   console.log(`   - Enhanced mockup: POST /api/enhanced-mockup`);

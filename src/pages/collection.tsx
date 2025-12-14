@@ -88,12 +88,10 @@ const Collection: React.FC = () => {
                 key={item.id}
                 className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100"
               >
-                <div className="relative w-full h-80 bg-gray-50 overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                <div className="relative w-full h-80 bg-gray-50 overflow-hidden flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-2xl font-semibold text-gray-400">Coming Soon</p>
+                  </div>
                   <div className="absolute top-3 left-3 text-xs bg-black/70 text-white px-2 py-1 rounded-md">
                     {item.category.includes("Oversized") ? "OVERSIZED FIT" : "RELAXED FIT"}
                   </div>
@@ -139,6 +137,11 @@ const Collection: React.FC = () => {
             50%{opacity:1;transform:scale(1.05);}
           }
           .animate-pulse-slow{animation:pulseSlow 3s infinite;}
+          @keyframes pingSlow {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.4); opacity: 0; }
+          }
+          .animate-ping-slow{animation:pingSlow 4s infinite;}
         `}
       </style>
     </div>

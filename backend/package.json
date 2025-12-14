@@ -5,14 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start:sd": "node backend/index.sd.js",
-    "dev:sd": "nodemon backend/index.sd.js",
-    "frontend": "vite",
-    "dev:frontend": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "start": "concurrently \"npm run start:sd\" \"npm run frontend\"",
-    "dev": "concurrently \"npm run dev:sd\" \"npm run dev:frontend\""
+    "start": "node index.fibo.js",
+    "dev": "nodemon index.fibo.js",
+    "start:sd": "node index.sd.js",
+    "dev:sd": "nodemon index.sd.js"
   },
   "keywords": [],
   "author": "",
