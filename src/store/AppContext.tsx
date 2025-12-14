@@ -308,51 +308,22 @@ const AppContext = createContext<{
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Load persisted state on mount
+  // Clear all state on page refresh - fresh start every time
   useEffect(() => {
     try {
-      // Cart items are NOT loaded from localStorage (clear on refresh)
-
-      // Load design state
-      const savedDesignState = localStorage.getItem('designState');
-      if (savedDesignState) {
-        const designState = JSON.parse(savedDesignState);
-        dispatch({ type: 'LOAD_PERSISTED_STATE', payload: designState });
-      }
-
-      // Load T-shirt color
-      const savedTshirtColor = localStorage.getItem('tshirtColor');
-      if (savedTshirtColor) {
-        dispatch({ type: 'SET_TSHIRT_COLOR', payload: savedTshirtColor });
-      }
+      // Clear any existing localStorage data on page load
+      localStorage.removeItem('designState');
+      localStorage.removeItem('tshirtColor');
+      localStorage.removeItem('cartItems');
+      
+      console.log('🧹 Cleared all persisted state - fresh start!');
     } catch (error) {
-      console.error('Error loading persisted state:', error);
+      console.error('Error clearing persisted state:', error);
     }
   }, []);
 
-  // Persist design state whenever it changes
-  useEffect(() => {
-    const designState = {
-      frontDesign: state.frontDesign,
-      backDesign: state.backDesign,
-      frontDesignAlignment: state.frontDesignAlignment,
-      backDesignAlignment: state.backDesignAlignment,
-      currentSide: state.currentSide,
-    };
-    
-    localStorage.setItem('designState', JSON.stringify(designState));
-  }, [
-    state.frontDesign,
-    state.backDesign,
-    state.frontDesignAlignment,
-    state.backDesignAlignment,
-    state.currentSide,
-  ]);
-
-  // Persist T-shirt color
-  useEffect(() => {
-    localStorage.setItem('tshirtColor', state.tshirtColor);
-  }, [state.tshirtColor]);
+  // Note: No persistence effects - everything clears on refresh
+  // This ensures a clean slate every time the user refreshes the page
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

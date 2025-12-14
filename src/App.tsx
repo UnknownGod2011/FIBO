@@ -11,7 +11,14 @@ import { useEffect } from 'react';
 
 function AppContent() {
   const { tshirtColor, setTshirtColor } = useTshirtState();
-  const { currentImage, currentSide, switchSide } = useDesignState();
+  const { currentImage, currentSide, switchSide, setSuccess } = useDesignState();
+
+  // Show fresh start notification
+  useEffect(() => {
+    setSuccess('🎨 Fresh canvas ready! Start creating your design.');
+    const timer = setTimeout(() => setSuccess(null), 3000);
+    return () => clearTimeout(timer);
+  }, [setSuccess]);
 
   // Wake up Render backend on app load
   useEffect(() => {
