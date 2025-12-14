@@ -16,20 +16,58 @@ export interface CartItem {
   frontDesign: {
     imageUrl: string | null;
     design: string;
+    alignment?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+    };
+    snapshotUrl?: string; // High-quality composite preview
   };
   backDesign: {
     imageUrl: string | null;
     design: string;
+    alignment?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+    };
+    snapshotUrl?: string; // High-quality composite preview
   };
   tshirtColor: string;
+  material: string;
+  size: string;
   addedAt: string;
   price: number;
+  // AR Try-On specific data
+  arData?: {
+    frontMockupUrl?: string;
+    backMockupUrl?: string;
+    frontSnapshotUrl?: string;
+    backSnapshotUrl?: string;
+    lastUsedForAR?: string;
+  };
+}
+
+export interface DesignAlignment {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
 }
 
 export interface AppState {
   // Front & Back Design state (CRITICAL: Completely separate)
   frontDesign: DesignData;
   backDesign: DesignData;
+  
+  // Design alignment states (PERSISTENT)
+  frontDesignAlignment: DesignAlignment;
+  backDesignAlignment: DesignAlignment;
   
   // Current view state
   currentSide: 'front' | 'back';
@@ -61,6 +99,7 @@ export type AppAction =
   | { type: 'SET_LAST_REFINEMENT_PROMPT'; payload: { side: 'front' | 'back'; prompt: string } }
   | { type: 'SET_CAN_REFINE'; payload: { side: 'front' | 'back'; canRefine: boolean } }
   | { type: 'SET_HAS_GENERATED'; payload: { side: 'front' | 'back'; hasGenerated: boolean } }
+  | { type: 'UPDATE_DESIGN_ALIGNMENT'; payload: { side: 'front' | 'back'; alignment: DesignAlignment } }
   | { type: 'SWITCH_SIDE'; payload: 'front' | 'back' }
   | { type: 'SET_TSHIRT_COLOR'; payload: string }
   | { type: 'SET_ERROR'; payload: string | null }
@@ -83,10 +122,21 @@ const initialDesignData: DesignData = {
   hasGenerated: false,
 };
 
+// Initial alignment data
+const initialAlignment: DesignAlignment = {
+  x: 205, // Centered horizontally on T-shirt chest area
+  y: 280, // Positioned in center of T-shirt chest (away from collar)
+  width: 150,
+  height: 150,
+  rotation: 0,
+};
+
 // Initial state
 const initialState: AppState = {
   frontDesign: { ...initialDesignData },
   backDesign: { ...initialDesignData },
+  frontDesignAlignment: { ...initialAlignment },
+  backDesignAlignment: { ...initialAlignment },
   currentSide: 'front',
   isGenerating: false,
   isRefining: false,
@@ -180,6 +230,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         }
       };
     
+    case 'UPDATE_DESIGN_ALIGNMENT':
+      const alignmentSide = action.payload.side;
+      return {
+        ...state,
+        [alignmentSide + 'DesignAlignment']: action.payload.alignment
+      };
+    
     case 'SWITCH_SIDE':
       return { ...state, currentSide: action.payload };
     
@@ -197,13 +254,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     
     case 'ADD_TO_CART':
       const newCartItems = [...state.cartItems, action.payload];
-      // Persist to localStorage
-      localStorage.setItem('cartItems', JSON.stringify(newCartItems));
+      // Cart items are NOT persisted (clear on refresh)
       return { ...state, cartItems: newCartItems };
     
     case 'REMOVE_FROM_CART':
       const filteredItems = state.cartItems.filter(item => item.id !== action.payload);
-      localStorage.setItem('cartItems', JSON.stringify(filteredItems));
+      // Cart items are NOT persisted (clear on refresh)
       return { ...state, cartItems: filteredItems };
     
     case 'LOAD_CART_ITEMS':
@@ -255,12 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load persisted state on mount
   useEffect(() => {
     try {
-      // Load cart items
-      const savedCartItems = localStorage.getItem('cartItems');
-      if (savedCartItems) {
-        const cartItems = JSON.parse(savedCartItems);
-        dispatch({ type: 'LOAD_CART_ITEMS', payload: cartItems });
-      }
+      // Cart items are NOT loaded from localStorage (clear on refresh)
 
       // Load design state
       const savedDesignState = localStorage.getItem('designState');
@@ -284,6 +335,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const designState = {
       frontDesign: state.frontDesign,
       backDesign: state.backDesign,
+      frontDesignAlignment: state.frontDesignAlignment,
+      backDesignAlignment: state.backDesignAlignment,
       currentSide: state.currentSide,
     };
     
@@ -291,6 +344,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [
     state.frontDesign,
     state.backDesign,
+    state.frontDesignAlignment,
+    state.backDesignAlignment,
     state.currentSide,
   ]);
 
@@ -319,6 +374,7 @@ export function useAppContext() {
 export function useDesignState() {
   const { state, dispatch } = useAppContext();
   const currentDesign = state.currentSide === 'front' ? state.frontDesign : state.backDesign;
+  const currentAlignment = state.currentSide === 'front' ? state.frontDesignAlignment : state.backDesignAlignment;
   
   return {
     // Current side design data
@@ -329,6 +385,11 @@ export function useDesignState() {
     lastRefinementPrompt: currentDesign.lastRefinementPrompt,
     canRefine: currentDesign.canRefine,
     hasGenerated: currentDesign.hasGenerated,
+    
+    // Current side alignment data
+    currentAlignment: currentAlignment,
+    frontAlignment: state.frontDesignAlignment,
+    backAlignment: state.backDesignAlignment,
     
     // Global UI state
     isGenerating: state.isGenerating,
@@ -352,6 +413,7 @@ export function useDesignState() {
     setCurrentImage: (url: string) => dispatch({ type: 'SET_CURRENT_IMAGE', payload: { side: state.currentSide, url } }),
     setLastPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_PROMPT', payload: { side: state.currentSide, prompt } }),
     setLastRefinementPrompt: (prompt: string) => dispatch({ type: 'SET_LAST_REFINEMENT_PROMPT', payload: { side: state.currentSide, prompt } }),
+    updateAlignment: (alignment: DesignAlignment) => dispatch({ type: 'UPDATE_DESIGN_ALIGNMENT', payload: { side: state.currentSide, alignment } }),
     setError: (error: string | null) => dispatch({ type: 'SET_ERROR', payload: error }),
     setSuccess: (success: string | null) => dispatch({ type: 'SET_SUCCESS', payload: success }),
     setGenerationProgress: (progress: string) => dispatch({ type: 'SET_GENERATION_PROGRESS', payload: progress }),
@@ -367,6 +429,26 @@ export function useCartState() {
     cartItems: state.cartItems,
     addToCart: (item: CartItem) => dispatch({ type: 'ADD_TO_CART', payload: item }),
     removeFromCart: (id: string) => dispatch({ type: 'REMOVE_FROM_CART', payload: id }),
+    // Export cart data for AR try-on
+    exportForAR: (itemId: string) => {
+      const item = state.cartItems.find(i => i.id === itemId);
+      if (!item) return null;
+      
+      return {
+        id: item.id,
+        frontDesign: item.frontDesign,
+        backDesign: item.backDesign,
+        tshirtColor: item.tshirtColor,
+        material: item.material,
+        size: item.size,
+        arData: item.arData
+      };
+    },
+    // Get latest cart item for AR
+    getLatestForAR: () => {
+      if (state.cartItems.length === 0) return null;
+      return state.cartItems[state.cartItems.length - 1];
+    }
   };
 }
 

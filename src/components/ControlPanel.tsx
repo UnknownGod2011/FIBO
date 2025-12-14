@@ -39,6 +39,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     generationProgress,
     frontDesign,
     backDesign,
+    frontAlignment,
+    backAlignment,
     setGenerating,
     setRefining,
     setGeneratedImage,
@@ -260,6 +262,81 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
 
 
+  // Canvas-based snapshot generation for accurate cart previews
+  const generateCanvasSnapshot = async (side: 'front' | 'back'): Promise<string | null> => {
+    const design = side === 'front' ? frontDesign : backDesign;
+    const alignment = side === 'front' ? frontAlignment : backAlignment;
+    
+    if (!design.currentImage) return null;
+
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+
+      // Set canvas size to match T-shirt mockup dimensions
+      canvas.width = 560;
+      canvas.height = 700;
+
+      const tshirtImg = new Image();
+      const designImg = new Image();
+      
+      let imagesLoaded = 0;
+      const checkComplete = () => {
+        imagesLoaded++;
+        if (imagesLoaded === 2) {
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw T-shirt base
+          ctx.drawImage(tshirtImg, 0, 0, canvas.width, canvas.height);
+          
+          // Apply T-shirt color using composite operations
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.fillStyle = tshirtColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Reset composite mode for design
+          ctx.globalCompositeOperation = 'source-over';
+          
+          // Draw design with exact alignment
+          ctx.save();
+          ctx.translate(
+            alignment.x + alignment.width / 2,
+            alignment.y + alignment.height / 2
+          );
+          ctx.rotate((alignment.rotation * Math.PI) / 180);
+          ctx.drawImage(
+            designImg,
+            -alignment.width / 2,
+            -alignment.height / 2,
+            alignment.width,
+            alignment.height
+          );
+          ctx.restore();
+          
+          // Convert to data URL
+          resolve(canvas.toDataURL('image/png', 0.9));
+        }
+      };
+
+      tshirtImg.crossOrigin = 'anonymous';
+      designImg.crossOrigin = 'anonymous';
+      
+      tshirtImg.onload = checkComplete;
+      designImg.onload = checkComplete;
+      
+      tshirtImg.onerror = () => resolve(null);
+      designImg.onerror = () => resolve(null);
+      
+      tshirtImg.src = side === 'front' ? '/mockups/tshirt.png' : '/mockups/tshirtbp.png';
+      designImg.src = design.currentImage!;
+    });
+  };
+
   const handleAddToCart = async () => {
     if (!frontDesign.currentImage && !backDesign.currentImage) {
       setError("Please generate at least one design (front or back)");
@@ -267,20 +344,39 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     }
 
     try {
-      // Create cart item with both front and back designs
+      setGenerationProgress('Creating accurate cart preview...');
+      
+      // Generate canvas-based snapshots for perfect alignment
+      const frontSnapshot = frontDesign.currentImage ? await generateCanvasSnapshot('front') : null;
+      const backSnapshot = backDesign.currentImage ? await generateCanvasSnapshot('back') : null;
+      
+      // Create enhanced cart item with canvas snapshots and alignment data
       const cartItem: CartItem = {
         id: Date.now().toString(),
         frontDesign: {
           imageUrl: frontDesign.currentImage,
-          design: frontDesign.lastPrompt || 'No front design'
+          design: frontDesign.lastPrompt || 'No front design',
+          alignment: frontAlignment,
+          snapshotUrl: frontSnapshot || undefined // Canvas-generated accurate preview
         },
         backDesign: {
           imageUrl: backDesign.currentImage,
-          design: backDesign.lastPrompt || 'No back design'
+          design: backDesign.lastPrompt || 'No back design',
+          alignment: backAlignment,
+          snapshotUrl: backSnapshot || undefined // Canvas-generated accurate preview
         },
         tshirtColor,
+        material: 'Cotton', // Default material
+        size: 'M', // Default size
         addedAt: new Date().toISOString(),
-        price: 29.99
+        price: 29.99,
+        arData: {
+          frontMockupUrl: frontDesign.currentImage || undefined,
+          backMockupUrl: backDesign.currentImage || undefined,
+          frontSnapshotUrl: frontSnapshot || undefined,
+          backSnapshotUrl: backSnapshot || undefined,
+          lastUsedForAR: new Date().toISOString()
+        }
       };
 
       // Add to global cart state (this will also persist to localStorage)

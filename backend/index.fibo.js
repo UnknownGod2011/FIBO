@@ -7890,3 +7890,257 @@ app.listen(PORT, () => {
   console.log(`   - T-shirt styles: GET /api/tshirt-styles`);
   console.log(`   - Test compositing: POST /api/test-enhanced-compositing`);
 });
+
+/**
+ * Design Cleanup System - Prevent storage bloat
+ */
+
+// Cleanup old design files (older than 24 hours)
+const cleanupOldDesigns = async () => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const designsDir = path.join(__dirname, 'designs');
+    
+    console.log('🧹 Starting design cleanup...');
+    
+    const files = await fs.readdir(designsDir);
+    const now = Date.now();
+    const maxAge = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
+    let deletedCount = 0;
+    
+    for (const file of files) {
+      const filePath = path.join(designsDir, file);
+      const stats = await fs.stat(filePath);
+      
+      // Delete files older than 1 hour
+      if (now - stats.mtime.getTime() > maxAge) {
+        await fs.unlink(filePath);
+        deletedCount++;
+        console.log(`🗑️ Deleted old design: ${file}`);
+      }
+    }
+    
+    console.log(`✅ Cleanup complete: ${deletedCount} files deleted`);
+    return { deletedCount, totalFiles: files.length };
+  } catch (error) {
+    console.error('❌ Cleanup error:', error.message);
+    return { error: error.message };
+  }
+};
+
+// Manual cleanup endpoint
+app.post("/api/cleanup/designs", async (req, res) => {
+  try {
+    const result = await cleanupOldDesigns();
+    
+    res.json({
+      success: true,
+      message: `Cleanup completed: ${result.deletedCount} files deleted`,
+      ...result
+    });
+  } catch (error) {
+    console.error("Cleanup error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
+// Get storage stats
+app.get("/api/storage/stats", async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const designsDir = path.join(__dirname, 'designs');
+    
+    const files = await fs.readdir(designsDir);
+    let totalSize = 0;
+    const fileStats = [];
+    
+    for (const file of files) {
+      const filePath = path.join(designsDir, file);
+      const stats = await fs.stat(filePath);
+      totalSize += stats.size;
+      fileStats.push({
+        name: file,
+        size: stats.size,
+        created: stats.mtime,
+        age: Date.now() - stats.mtime.getTime()
+      });
+    }
+    
+    // Sort by age (newest first)
+    fileStats.sort((a, b) => b.created - a.created);
+    
+    res.json({
+      success: true,
+      stats: {
+        totalFiles: files.length,
+        totalSize: totalSize,
+        totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+        oldestFile: fileStats[fileStats.length - 1],
+        newestFile: fileStats[0],
+        files: fileStats.slice(0, 10) // Return latest 10 files
+      }
+    });
+  } catch (error) {
+    console.error("Storage stats error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
+// Auto-cleanup scheduler (runs every 6 hours)
+setInterval(cleanupOldDesigns, 6 * 60 * 60 * 1000);
+
+console.log('🧹 Design cleanup system initialized - auto-cleanup every 6 hours');
+/**
+ * T-shirt Snapshot System - Generate composite previews for cart
+ */
+app.post("/api/generate-snapshot", async (req, res) => {
+  try {
+    const { 
+      frontDesign, 
+      backDesign, 
+      tshirtColor, 
+      frontAlignment, 
+      backAlignment 
+    } = req.body;
+
+    console.log('📸 Generating T-shirt snapshots...');
+
+    const snapshots = {};
+
+    // Generate front snapshot if design exists
+    if (frontDesign?.imageUrl && frontAlignment) {
+      const frontSnapshot = await generateTshirtSnapshot(
+        frontDesign.imageUrl,
+        tshirtColor,
+        frontAlignment,
+        'front'
+      );
+      snapshots.front = frontSnapshot;
+    }
+
+    // Generate back snapshot if design exists
+    if (backDesign?.imageUrl && backAlignment) {
+      const backSnapshot = await generateTshirtSnapshot(
+        backDesign.imageUrl,
+        tshirtColor,
+        backAlignment,
+        'back'
+      );
+      snapshots.back = backSnapshot;
+    }
+
+    res.json({
+      success: true,
+      snapshots,
+      message: 'Snapshots generated successfully'
+    });
+
+  } catch (error) {
+    console.error("Snapshot generation error:", error.message);
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+});
+
+/**
+ * Generate a composite T-shirt snapshot using canvas
+ */
+async function generateTshirtSnapshot(designUrl, tshirtColor, alignment, side) {
+  const { createCanvas, loadImage } = require('canvas');
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    // Create canvas matching cart preview dimensions (but higher res for quality)
+    const canvas = createCanvas(320, 320); // 4x cart size for better quality
+    const ctx = canvas.getContext('2d');
+
+    // Load T-shirt mockup
+    const tshirtPath = side === 'front' ? 
+      path.join(__dirname, '../public/mockups/tshirt.png') :
+      path.join(__dirname, '../public/mockups/tshirtbp.png');
+    
+    const tshirtImg = await loadImage(tshirtPath);
+    
+    // Draw T-shirt base
+    ctx.drawImage(tshirtImg, 0, 0, 320, 320);
+
+    // Apply T-shirt color using multiply blend
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = tshirtColor;
+    ctx.fillRect(0, 0, 320, 320);
+    
+    // Reset blend mode for design
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Load and draw design if URL is provided
+    if (designUrl) {
+      let designImg;
+      
+      // Handle both local files and data URLs
+      if (designUrl.startsWith('data:')) {
+        designImg = await loadImage(designUrl);
+      } else if (designUrl.startsWith('/')) {
+        // Local file path
+        const localPath = path.join(__dirname, '../public', designUrl);
+        designImg = await loadImage(localPath);
+      } else {
+        // Full URL or relative path
+        designImg = await loadImage(designUrl);
+      }
+
+      // Calculate scaled position and size for 320x320 canvas
+      const scaleX = 320 / 560; // Original mockup width
+      const scaleY = 320 / 700; // Original mockup height
+      
+      const scaledX = alignment.x * scaleX;
+      const scaledY = alignment.y * scaleY;
+      const scaledWidth = alignment.width * scaleX;
+      const scaledHeight = alignment.height * scaleY;
+
+      // Save context for rotation
+      ctx.save();
+      
+      // Move to center of design for rotation
+      ctx.translate(scaledX + scaledWidth/2, scaledY + scaledHeight/2);
+      ctx.rotate((alignment.rotation * Math.PI) / 180);
+      
+      // Draw design centered at rotation point
+      ctx.drawImage(designImg, -scaledWidth/2, -scaledHeight/2, scaledWidth, scaledHeight);
+      
+      // Restore context
+      ctx.restore();
+    }
+
+    // Save snapshot to file
+    const snapshotId = `snapshot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const snapshotPath = path.join(__dirname, 'designs', `${snapshotId}.png`);
+    
+    const buffer = canvas.toBuffer('image/png');
+    await fs.writeFile(snapshotPath, buffer);
+
+    const snapshotUrl = `/designs/${snapshotId}.png`;
+    
+    console.log(`✅ Generated ${side} snapshot: ${snapshotUrl}`);
+    
+    return {
+      url: snapshotUrl,
+      path: snapshotPath,
+      id: snapshotId
+    };
+
+  } catch (error) {
+    console.error(`❌ Snapshot generation failed for ${side}:`, error.message);
+    throw error;
+  }
+}

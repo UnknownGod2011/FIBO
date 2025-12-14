@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { Rnd } from "react-rnd";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDesignState } from "../store/AppContext";
 
 interface TShirtMockupProps {
   color: string;
@@ -38,26 +39,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     }
   };
 
-  // SEPARATE design states for front and back (CRITICAL FIX)
-  const [frontDesignState, setFrontDesignState] = useState({
-    x: 205, // Centered horizontally on T-shirt chest area
-    y: 280, // Positioned in center of T-shirt chest (away from collar)
-    width: 150,
-    height: 150,
-    rotation: 0,
-  });
-
-  const [backDesignState, setBackDesignState] = useState({
-    x: 205, // Centered horizontally on T-shirt chest area
-    y: 280, // Positioned in center of T-shirt chest (away from collar)
-    width: 150,
-    height: 150,
-    rotation: 0,
-  });
-
-  // Get current design state based on active side
-  const currentDesignState = side === 'front' ? frontDesignState : backDesignState;
-  const setCurrentDesignState = side === 'front' ? setFrontDesignState : setBackDesignState;
+  // Use global design alignment state (PERSISTENT ACROSS NAVIGATION)
+  const { currentAlignment, updateAlignment } = useDesignState();
 
   // Transition animation state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -76,7 +59,7 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
     const centerX = box.left + box.width / 2;
     const centerY = box.top + box.height / 2;
     const startAngle = Math.atan2(startY - centerY, startX - centerX);
-    const startRotation = currentDesignState.rotation;
+    const startRotation = currentAlignment.rotation;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const currentAngle = Math.atan2(
@@ -84,10 +67,11 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         moveEvent.clientX - centerX
       );
       const rotationDeg = (currentAngle - startAngle) * (180 / Math.PI);
-      setCurrentDesignState((prev) => ({
-        ...prev,
+      const newAlignment = {
+        ...currentAlignment,
         rotation: startRotation + rotationDeg,
-      }));
+      };
+      updateAlignment(newAlignment);
     };
 
     const handleMouseUp = () => {
@@ -278,26 +262,28 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           {design && (
             <Rnd
               bounds="parent"
-              size={{ width: currentDesignState.width, height: currentDesignState.height }}
-              position={{ x: currentDesignState.x, y: currentDesignState.y }}
-              onDragStop={(_, d) =>
-                setCurrentDesignState((prev) => ({ ...prev, x: d.x, y: d.y }))
-              }
-              onResizeStop={(_, __, ref, ___, position) =>
-                setCurrentDesignState({
-                  ...currentDesignState,
+              size={{ width: currentAlignment.width, height: currentAlignment.height }}
+              position={{ x: currentAlignment.x, y: currentAlignment.y }}
+              onDragStop={(_, d) => {
+                const newAlignment = { ...currentAlignment, x: d.x, y: d.y };
+                updateAlignment(newAlignment);
+              }}
+              onResizeStop={(_, __, ref, ___, position) => {
+                const newAlignment = {
+                  ...currentAlignment,
                   width: parseFloat(ref.style.width),
                   height: parseFloat(ref.style.height),
                   ...position,
-                })
-              }
+                };
+                updateAlignment(newAlignment);
+              }}
               lockAspectRatio
               className="z-30 group"
             >
               <div
                 ref={rotateRef}
                 style={{
-                  transform: `rotate(${currentDesignState.rotation}deg)`,
+                  transform: `rotate(${currentAlignment.rotation}deg)`,
                   transformOrigin: "center center",
                   width: "100%",
                   height: "100%",

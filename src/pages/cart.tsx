@@ -119,19 +119,53 @@ export default function Cart() {
                         maskSize: "contain",
                       }}
                     />
-                    {item.frontDesign.imageUrl && (
-                      <img
-                        src={item.frontDesign.imageUrl}
-                        alt="Front design"
-                        className="absolute inset-0 w-6 h-6 object-contain m-auto"
-                        style={{
-                          top: '30%',
-                          left: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          mixBlendMode: "overlay",
-                          opacity: 0.9
-                        }}
-                      />
+                    {(item.frontDesign.imageUrl || item.frontDesign.snapshotUrl) && (
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ isolation: 'isolate' }}
+                      >
+                        {item.frontDesign.snapshotUrl ? (
+                          // Use canvas-generated snapshot for perfect accuracy
+                          <img
+                            src={item.frontDesign.snapshotUrl}
+                            alt="Front design snapshot"
+                            className="absolute inset-0 w-full h-full object-contain"
+                            style={{
+                              mixBlendMode: "normal",
+                              opacity: 1,
+                              filter: "none"
+                            }}
+                          />
+                        ) : (
+                          // Enhanced fallback with better positioning
+                          <img
+                            src={item.frontDesign.imageUrl!}
+                            alt="Front design"
+                            className="absolute object-contain"
+                            style={{
+                              // Scale alignment to cart preview size (80px container)
+                              width: item.frontDesign.alignment 
+                                ? `${(item.frontDesign.alignment.width / 560) * 80}px` 
+                                : '21px', // (150/560)*80
+                              height: item.frontDesign.alignment 
+                                ? `${(item.frontDesign.alignment.height / 700) * 80}px` 
+                                : '17px', // (150/700)*80
+                              top: item.frontDesign.alignment 
+                                ? `${(item.frontDesign.alignment.y / 700) * 100}%` 
+                                : '40%', // (280/700)*100
+                              left: item.frontDesign.alignment 
+                                ? `${(item.frontDesign.alignment.x / 560) * 100}%` 
+                                : '36.6%', // (205/560)*100
+                              transform: item.frontDesign.alignment 
+                                ? `translate(-50%, -50%) rotate(${item.frontDesign.alignment.rotation}deg)` 
+                                : 'translate(-50%, -50%)',
+                              mixBlendMode: "normal",
+                              opacity: 0.95,
+                              filter: "contrast(1.05) brightness(1.02)"
+                            }}
+                          />
+                        )}
+                      </div>
                     )}
                     <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1 rounded">
                       Front
@@ -158,19 +192,53 @@ export default function Cart() {
                         maskSize: "contain",
                       }}
                     />
-                    {item.backDesign.imageUrl && (
-                      <img
-                        src={item.backDesign.imageUrl}
-                        alt="Back design"
-                        className="absolute inset-0 w-6 h-6 object-contain m-auto"
-                        style={{
-                          top: '30%',
-                          left: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          mixBlendMode: "overlay",
-                          opacity: 0.9
-                        }}
-                      />
+                    {(item.backDesign.imageUrl || item.backDesign.snapshotUrl) && (
+                      <div 
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ isolation: 'isolate' }}
+                      >
+                        {item.backDesign.snapshotUrl ? (
+                          // Use canvas-generated snapshot for perfect accuracy
+                          <img
+                            src={item.backDesign.snapshotUrl}
+                            alt="Back design snapshot"
+                            className="absolute inset-0 w-full h-full object-contain"
+                            style={{
+                              mixBlendMode: "normal",
+                              opacity: 1,
+                              filter: "none"
+                            }}
+                          />
+                        ) : (
+                          // Enhanced fallback with better positioning
+                          <img
+                            src={item.backDesign.imageUrl!}
+                            alt="Back design"
+                            className="absolute object-contain"
+                            style={{
+                              // Scale alignment to cart preview size (80px container)
+                              width: item.backDesign.alignment 
+                                ? `${(item.backDesign.alignment.width / 560) * 80}px` 
+                                : '21px', // (150/560)*80
+                              height: item.backDesign.alignment 
+                                ? `${(item.backDesign.alignment.height / 700) * 80}px` 
+                                : '17px', // (150/700)*80
+                              top: item.backDesign.alignment 
+                                ? `${(item.backDesign.alignment.y / 700) * 100}%` 
+                                : '40%', // (280/700)*100
+                              left: item.backDesign.alignment 
+                                ? `${(item.backDesign.alignment.x / 560) * 100}%` 
+                                : '36.6%', // (205/560)*100
+                              transform: item.backDesign.alignment 
+                                ? `translate(-50%, -50%) rotate(${item.backDesign.alignment.rotation}deg)` 
+                                : 'translate(-50%, -50%)',
+                              mixBlendMode: "normal",
+                              opacity: 0.95,
+                              filter: "contrast(1.05) brightness(1.02)"
+                            }}
+                          />
+                        )}
+                      </div>
                     )}
                     <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white text-xs px-1 rounded">
                       Back
