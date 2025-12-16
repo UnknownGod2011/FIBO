@@ -78,7 +78,7 @@ export default function Cart() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
-      <div className="w-full px-6">
+      <div className="max-w-7xl mx-auto px-6">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
