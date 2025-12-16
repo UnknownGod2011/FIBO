@@ -308,31 +308,19 @@ const AppContext = createContext<{
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Detect page refresh vs internal navigation
+  // Load persisted state on mount (but clear on actual page refresh)
   useEffect(() => {
     try {
-      // Use modern navigation API with fallback
-      const getNavigationType = () => {
-        if ('navigation' in window && 'getEntriesByType' in performance) {
-          const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-          if (navEntries.length > 0) {
-            return navEntries[0].type;
-          }
-        }
-        // Fallback: check if session is initialized
-        return sessionStorage.getItem('appInitialized') ? 'navigate' : 'reload';
-      };
-
-      const navigationType = getNavigationType();
-      const isPageRefresh = navigationType === 'reload' || !sessionStorage.getItem('appInitialized');
+      // Check if this is a fresh page load (not just React navigation)
+      const isPageRefresh = !sessionStorage.getItem('appInitialized');
       
       if (isPageRefresh) {
-        // Actual page refresh (Ctrl+R, F5, etc.) - clear everything
+        // Fresh page load - clear everything
         localStorage.removeItem('designState');
         localStorage.removeItem('tshirtColor');
         localStorage.removeItem('cartItems');
         sessionStorage.setItem('appInitialized', 'true');
-        console.log('🧹 Page refresh detected - cleared all state');
+        console.log('🧹 Fresh page load - cleared all state');
       } else {
         // Internal navigation - restore state
         console.log('🔄 Internal navigation - restoring state');

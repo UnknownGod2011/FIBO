@@ -657,7 +657,24 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       )}
 
-      {/* Output format removed for cleaner UI */}
+      {/* Vector Mode Toggle */}
+      <div className="flex items-center justify-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <span className="text-sm text-gray-600">Output Format:</span>
+        <button
+          onClick={() => setVectorMode(false)}
+          className={`px-3 py-1 text-xs rounded ${!vectorMode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300'}`}
+        >
+          Raster (PNG)
+        </button>
+        <button
+          onClick={() => {/* Disabled - not working */}}
+          disabled={true}
+          className="px-3 py-1 text-xs rounded bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed opacity-50"
+          title="Minimalist Style temporarily disabled"
+        >
+          Minimalist Style (Disabled)
+        </button>
+      </div>
 
       {/* Primary Prompt with inline button */}
       <div className="flex space-x-3">
