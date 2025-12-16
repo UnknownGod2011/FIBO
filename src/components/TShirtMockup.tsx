@@ -226,8 +226,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         {/* T-shirt Mockup Display - SHARED CONTAINER FOR BOTH FRONT AND BACK */}
         <div className={`absolute inset-0 bg-transparent transition-all duration-300 ${
           isTransitioning 
-            ? 'opacity-30 transform scale-95 rotate-y-12' 
-            : 'opacity-100 transform scale-100 rotate-y-0'
+            ? 'opacity-30 transform scale-95' 
+            : 'opacity-100 transform scale-100'
         }`}>
           {/* Base Shirt */}
           <img
@@ -388,24 +388,6 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         </div>
       </div>
     </div>
-    
-    {/* Custom CSS for 3D flip animation */}
-    <style jsx>{`
-      .rotate-y-0 {
-        transform: rotateY(0deg);
-      }
-      .rotate-y-12 {
-        transform: rotateY(12deg);
-      }
-      @keyframes flipIn {
-        0% { transform: rotateY(-90deg) scale(0.8); opacity: 0; }
-        50% { transform: rotateY(-45deg) scale(0.9); opacity: 0.5; }
-        100% { transform: rotateY(0deg) scale(1); opacity: 1; }
-      }
-      .animate-flip-in {
-        animation: flipIn 0.4s ease-out;
-      }
-    `}</style>
   );
 };
 
