@@ -57,7 +57,7 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md sticky top-0 z-40 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -112,8 +112,9 @@ function AppContent() {
         </div>
       </header>
 
-      {/* Routes */}
-      <Routes>
+      {/* Main Content */}
+      <main className="flex-1">
+        <Routes>
         <Route
           path="/"
           element={
@@ -160,7 +161,8 @@ function AppContent() {
         <Route path="/ar-tryon" element={<VRTryOnPage />} />
         <Route path="/collection" element={<Collection />} />
         <Route path="/cart" element={<Cart />} />
-      </Routes>
+        </Routes>
+      </main>
 
       {/* Minimal Footer */}
       <footer className="bg-gray-900 text-white py-6 mt-16">

@@ -135,8 +135,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
               setIsTransitioning(true);
               setTimeout(() => {
                 onSideSwitch?.(side === 'front' ? 'back' : 'front');
-                setTimeout(() => setIsTransitioning(false), 50);
-              }, 150);
+                setTimeout(() => setIsTransitioning(false), 100);
+              }, 100);
             }}
             disabled={isTransitioning}
             className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -211,15 +211,15 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           </>
         )}
 
-        {/* Minimal loading indicator during transition */}
+        {/* Simple loading indicator during transition */}
         {isTransitioning && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/20">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
 
         {/* T-shirt Mockup Display - SHARED CONTAINER FOR BOTH FRONT AND BACK */}
-        <div className={`absolute inset-0 bg-transparent transition-opacity duration-300 ${isTransitioning ? 'opacity-30' : 'opacity-100'}`}>
+        <div className={`absolute inset-0 bg-transparent transition-opacity duration-200 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
           {/* Base Shirt */}
           <img
             src={side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"}

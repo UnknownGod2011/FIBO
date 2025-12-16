@@ -9,7 +9,7 @@ export default function Cart() {
 
   if (cartItems.length === 0) {
     return (
-      <div className="relative min-h-[calc(100vh-200px)] overflow-hidden flex flex-col items-center justify-center text-center">
+      <div className="relative min-h-screen overflow-hidden flex flex-col items-center justify-center text-center">
         {/* 🌌 Animated Crystal Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-purple-100 via-blue-50 to-white">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(186,230,253,0.4),_transparent_70%)] animate-pulse"></div>
@@ -77,9 +77,10 @@ export default function Cart() {
   const totalPrice = cartItems.reduce((sum, item) => sum + item.price, 0);
 
   return (
-    <div className="min-h-[calc(100vh-200px)] bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
       <div className="max-w-4xl mx-auto px-6">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden"
+             style={{ minHeight: 'calc(100vh - 4rem)' }}>
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
             <h1 className="text-2xl font-semibold text-gray-800 flex items-center">

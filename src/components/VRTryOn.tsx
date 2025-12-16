@@ -112,16 +112,17 @@ const VRTryOn: React.FC = () => {
   }, [cartItems]);
 
   return (
-    <div className="min-h-[calc(100vh-200px)] bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
       <div className="max-w-6xl mx-auto px-6">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden"
+             style={{ minHeight: 'calc(100vh - 4rem)' }}>
           {/* Header */}
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 px-6 py-4 border-b border-gray-200">
             <h1 className="text-2xl font-semibold text-gray-800">VR Try-On Experience</h1>
             <p className="text-sm text-gray-600 mt-1">Upload your photo and see yourself wearing the design</p>
           </div>
 
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8" style={{ minHeight: '600px' }}>
             {/* Left Side - Upload & Controls */}
             <div className="space-y-6">
               {/* Photo Upload Section */}

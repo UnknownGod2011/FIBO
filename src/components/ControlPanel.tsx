@@ -589,20 +589,24 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </button>
       </div>
 
-      {/* Upload Options */}
-      <div className="flex items-center justify-center space-x-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-        {/* From file Option */}
-        <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600">From file</span>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isProcessingUpload || isGenerating || isRefining}
-            className="flex items-center justify-center w-6 h-6 bg-gray-100 border border-gray-300 rounded-full hover:bg-gray-200 hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
-            title="Upload a sketch for enhanced design generation"
-          >
-            <Plus className="w-3 h-3 text-gray-600 group-hover:text-gray-800" />
-          </button>
-        </div>
+      {/* Sketch Upload Section - Restored */}
+      <div className="flex items-center justify-center space-x-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <span className="text-sm font-medium text-blue-700">Upload your sketch</span>
+        <button
+          onClick={() => {
+            if (!prompt.trim()) {
+              setError('Please enter a design description first, then upload your sketch');
+              return;
+            }
+            fileInputRef.current?.click();
+          }}
+          disabled={isProcessingUpload || isGenerating || isRefining}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Upload a sketch for enhanced design generation"
+        >
+          {isProcessingUpload ? 'Processing...' : 'Upload Sketch'}
+        </button>
+        <span className="text-xs text-blue-600">Converts sketches to professional designs</span>
       </div>
 
       {/* Progress and Status Messages */}

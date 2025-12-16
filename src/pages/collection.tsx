@@ -61,7 +61,8 @@ const products: Product[] = [
 
 const Collection: React.FC = () => {
   return (
-    <div className="relative min-h-[calc(100vh-200px)] bg-gradient-to-br from-white via-blue-50/40 to-purple-50 overflow-hidden">
+    <div className="relative min-h-screen bg-gradient-to-br from-white via-blue-50/40 to-purple-50 overflow-hidden"
+         style={{ minHeight: 'calc(100vh - 4rem)' }}>
       {/* Animated Crystal Background */}
       <div className="absolute inset-0 -z-10 opacity-60">
         <div className="absolute top-1/3 left-1/4 w-72 h-72 bg-gradient-to-tr from-pink-300 via-purple-300 to-blue-200 rounded-full blur-3xl animate-pulse-slow"></div>
