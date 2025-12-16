@@ -135,8 +135,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
               setIsTransitioning(true);
               setTimeout(() => {
                 onSideSwitch?.(side === 'front' ? 'back' : 'front');
-                setTimeout(() => setIsTransitioning(false), 100);
-              }, 100);
+                setTimeout(() => setIsTransitioning(false), 200);
+              }, 200);
             }}
             disabled={isTransitioning}
             className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -180,8 +180,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                   setIsTransitioning(true);
                   setTimeout(() => {
                     onSideSwitch?.('front');
-                    setTimeout(() => setIsTransitioning(false), 50);
-                  }, 150);
+                    setTimeout(() => setIsTransitioning(false), 200);
+                  }, 200);
                 }}
                 disabled={isTransitioning}
                 className="absolute left-4 top-1/2 transform -translate-y-1/2 z-40 p-2 bg-white/80 hover:bg-white border border-gray-200 rounded-full shadow-lg transition-all hover:scale-110 disabled:opacity-50"
@@ -198,8 +198,8 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
                   setIsTransitioning(true);
                   setTimeout(() => {
                     onSideSwitch?.('back');
-                    setTimeout(() => setIsTransitioning(false), 50);
-                  }, 150);
+                    setTimeout(() => setIsTransitioning(false), 200);
+                  }, 200);
                 }}
                 disabled={isTransitioning}
                 className="absolute right-4 top-1/2 transform -translate-y-1/2 z-40 p-2 bg-white/80 hover:bg-white border border-gray-200 rounded-full shadow-lg transition-all hover:scale-110 disabled:opacity-50"
@@ -211,15 +211,24 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
           </>
         )}
 
-        {/* Simple loading indicator during transition */}
+        {/* Enhanced flip animation during transition */}
         {isTransitioning && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/20">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-gradient-to-r from-blue-50/80 to-purple-50/80 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-2 mx-auto"></div>
+              <div className="text-sm font-medium text-gray-700 animate-pulse">
+                {side === 'front' ? 'Flipping to back...' : 'Flipping to front...'}
+              </div>
+            </div>
           </div>
         )}
 
         {/* T-shirt Mockup Display - SHARED CONTAINER FOR BOTH FRONT AND BACK */}
-        <div className={`absolute inset-0 bg-transparent transition-opacity duration-200 ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`absolute inset-0 bg-transparent transition-all duration-300 ${
+          isTransitioning 
+            ? 'opacity-30 transform scale-95 rotate-y-12' 
+            : 'opacity-100 transform scale-100 rotate-y-0'
+        }`}>
           {/* Base Shirt */}
           <img
             src={side === 'front' ? "/mockups/tshirt.png" : "/mockups/tshirtbp.png"}
@@ -379,6 +388,24 @@ const TShirtMockup: React.FC<TShirtMockupProps> = ({
         </div>
       </div>
     </div>
+    
+    {/* Custom CSS for 3D flip animation */}
+    <style jsx>{`
+      .rotate-y-0 {
+        transform: rotateY(0deg);
+      }
+      .rotate-y-12 {
+        transform: rotateY(12deg);
+      }
+      @keyframes flipIn {
+        0% { transform: rotateY(-90deg) scale(0.8); opacity: 0; }
+        50% { transform: rotateY(-45deg) scale(0.9); opacity: 0.5; }
+        100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+      }
+      .animate-flip-in {
+        animation: flipIn 0.4s ease-out;
+      }
+    `}</style>
   );
 };
 
