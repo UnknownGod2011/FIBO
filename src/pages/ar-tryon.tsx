@@ -12,7 +12,7 @@ const ARTryOnPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md">
-        <div className="w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link 
             to="/"
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"

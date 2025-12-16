@@ -60,7 +60,7 @@ function AppContent() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
       <header className="bg-white shadow-md sticky top-0 z-40 backdrop-blur-md">
-        <div className="w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           {/* Brand Name + Logo */}
           <Link to="/" className="flex items-center space-x-3 animate-fade-in cursor-pointer">
             <h1 className="text-4xl font-extrabold text-gray-900 tracking-wide animate-text-glow flex items-center space-x-2 hover:text-purple-600 transition-colors duration-300">
@@ -117,7 +117,7 @@ function AppContent() {
         <Route
           path="/"
           element={
-            <div className="w-full max-w-7xl mx-auto px-6 py-8">
+            <div className="max-w-7xl mx-auto px-6 py-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[calc(100vh-200px)]">
                 {/* Left Side - T-shirt Mockup */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
@@ -164,7 +164,7 @@ function AppContent() {
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-8 mt-16">
-        <div className="w-full max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="text-lg font-semibold mb-3">Crishirts</h3>

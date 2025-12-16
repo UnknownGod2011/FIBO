@@ -68,7 +68,7 @@ const Collection: React.FC = () => {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-tr from-blue-200 via-indigo-200 to-purple-300 rounded-full blur-3xl animate-float-slow"></div>
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-6 py-16">
+      <div className="max-w-7xl mx-auto px-6 py-16">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-extrabold text-gray-900 flex items-center justify-center space-x-3">
