@@ -62,69 +62,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   
   const { addToCart } = useCartState();
 
-  // Handle brand color extraction
-  const handleBrandColorExtraction = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file');
-      return;
-    }
-
-    if (!prompt.trim()) {
-      setError('Please enter a design description first, then upload your brand image');
-      return;
-    }
-
-    setIsProcessingUpload(true);
-    setError(null);
-    setGenerationProgress('Extracting brand colors and generating design...');
-
-    try {
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const imageDataUrl = e.target?.result as string;
-        const base64Data = imageDataUrl.split(',')[1]; // Remove data:image/jpeg;base64,
-        
-        try {
-          // Call brand color extraction API
-          const response = await fetch(`${API_BASE}/generate-with-brand-colors`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              prompt: prompt,
-              brandImageData: base64Data
-            }),
-          });
-          
-          const data = await handleApiResponse(response);
-          
-          setGenerationProgress('');
-          setSuccess('✅ Enhanced design created with professional colors!');
-          setTimeout(() => setSuccess(null), 3000);
-          
-          // Update global state with generated design
-          setGeneratedImage(data.imageUrl);
-          setLastPrompt(`Enhanced design: ${prompt}`);
-          
-          // Clear the prompt since it was used
-          setPrompt('');
-          
-        } catch (err: any) {
-          console.error('Brand color extraction error:', err);
-          setGenerationProgress('');
-          setError(err.message || 'Failed to extract brand colors');
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      console.error('Brand image upload error:', err);
-      setGenerationProgress('');
-      setError(err.message || 'Failed to upload brand image');
-    } finally {
-      setIsProcessingUpload(false);
-    }
-  };
-
   // Handle sketch upload for ControlNet Canny processing
   const handleSketchUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -581,9 +518,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </button>
         </div>
         
-        {/* Enhanced Design Option */}
+        {/* Your Sketch Option */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600">Enhanced design</span>
+          <span className="text-xs text-gray-600">Your sketch</span>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessingUpload || isGenerating || isRefining}
@@ -591,28 +528,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             title="Upload a sketch for enhanced professional design generation (requires prompt first)"
           >
             <Plus className="w-3 h-3 text-purple-600 group-hover:text-purple-800" />
-          </button>
-        </div>
-        
-        {/* Enhanced Colors Option */}
-        <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600">Enhanced colors</span>
-          <button
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*';
-              input.onchange = (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (file) handleBrandColorExtraction(file);
-              };
-              input.click();
-            }}
-            disabled={isProcessingUpload || isGenerating || isRefining}
-            className="flex items-center justify-center w-6 h-6 bg-green-100 border border-green-300 rounded-full hover:bg-green-200 hover:border-green-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
-            title="Upload your brand image for enhanced professional color schemes"
-          >
-            <Plus className="w-3 h-3 text-green-600 group-hover:text-green-800" />
           </button>
         </div>
         
@@ -656,24 +571,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
         </div>
       )}
-
-      {/* Vector Mode Toggle */}
-      <div className="flex items-center justify-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-        <span className="text-sm text-gray-600">Output Format:</span>
-        <button
-          className="px-3 py-1 text-xs rounded bg-blue-600 text-white"
-        >
-          Raster (PNG)
-        </button>
-        <button
-          onClick={() => {/* Disabled - not working */}}
-          disabled={true}
-          className="px-3 py-1 text-xs rounded bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed opacity-50"
-          title="Minimalist Style temporarily disabled"
-        >
-          Minimalist Style (Disabled)
-        </button>
-      </div>
 
       {/* Primary Prompt with inline button */}
       <div className="flex space-x-3">
