@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Loader2, Download, ShoppingCart } from 'lucide-react';
+import { Camera, Upload, Loader2, Download, ShoppingCart, Video, Image as ImageIcon, Palette } from 'lucide-react';
 import { useCartState } from '../store/AppContext';
 
 const VRTryOn: React.FC = () => {
@@ -10,6 +10,8 @@ const VRTryOn: React.FC = () => {
   const [tryOnResult, setTryOnResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [videoMode, setVideoMode] = useState(false);
+  const [backgroundPrompt, setBackgroundPrompt] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Get cart items
@@ -71,25 +73,50 @@ const VRTryOn: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://fibo-t5mv.onrender.com')}/api/virtual-tryon`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userPhoto: userPhoto.split(',')[1], // Remove data:image/jpeg;base64,
-          designUrl: selectedDesign,
-          designPrompt: designPrompt
-        })
-      });
+      // Placeholder logic for try-on generation (FIBO API not finalized)
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate processing
       
-      const data = await response.json();
+      // Mock result - in production this would be the actual API response
+      const mockResult = selectedDesign; // Use selected design as placeholder
+      setTryOnResult(mockResult);
       
-      if (data.success) {
-        setTryOnResult(data.imageUrl);
-      } else {
-        setError(data.error?.message || 'Virtual try-on failed');
-      }
+      // Real API call would be:
+      // const response = await fetch(`${import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://fibo-t5mv.onrender.com')}/api/virtual-tryon`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     userPhoto: userPhoto.split(',')[1], // Remove data:image/jpeg;base64,
+      //     designUrl: selectedDesign,
+      //     designPrompt: designPrompt
+      //   })
+      // });
+      
     } catch (err: any) {
       setError(err.message || 'Failed to generate virtual try-on');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const modifyBackground = async () => {
+    if (!tryOnResult || !backgroundPrompt.trim()) {
+      setError('Please generate a try-on result first and enter background modification');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Placeholder logic for background modification
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing
+      
+      // Mock enhanced result
+      setTryOnResult(tryOnResult); // Keep same result for now
+      setBackgroundPrompt(''); // Clear prompt
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to modify background');
     } finally {
       setLoading(false);
     }
@@ -99,8 +126,9 @@ const VRTryOn: React.FC = () => {
   React.useEffect(() => {
     if (cartItems.length > 0) {
       const latestItem = cartItems[cartItems.length - 1];
-      // Use front design if available, otherwise back design
-      const designToUse = latestItem.frontDesign?.imageUrl || latestItem.backDesign?.imageUrl;
+      // Use composite snapshot if available, otherwise fallback to design image
+      const designToUse = latestItem.frontDesign?.snapshotUrl || latestItem.frontDesign?.imageUrl || 
+                         latestItem.backDesign?.snapshotUrl || latestItem.backDesign?.imageUrl;
       const promptToUse = latestItem.frontDesign?.design || latestItem.backDesign?.design || 'Custom design';
       
       if (designToUse) {
@@ -196,7 +224,9 @@ const VRTryOn: React.FC = () => {
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                           onClick={() => {
-                            const designToUse = frontDesign || backDesign;
+                            // Use composite snapshot if available, otherwise fallback to design image
+                            const designToUse = item.frontDesign?.snapshotUrl || item.frontDesign?.imageUrl || 
+                                              item.backDesign?.snapshotUrl || item.backDesign?.imageUrl;
                             const promptToUse = item.frontDesign?.design || item.backDesign?.design || 'Custom design';
                             
                             if (designToUse) {
@@ -207,9 +237,12 @@ const VRTryOn: React.FC = () => {
                           }}
                         >
                           <div className="flex items-center space-x-3">
-                            {(frontDesign || backDesign) && (
+                            {/* Show composite snapshot if available, otherwise show design image */}
+                            {(item.frontDesign?.snapshotUrl || item.frontDesign?.imageUrl || 
+                              item.backDesign?.snapshotUrl || item.backDesign?.imageUrl) && (
                               <img 
-                                src={frontDesign || backDesign || ''} 
+                                src={item.frontDesign?.snapshotUrl || item.frontDesign?.imageUrl || 
+                                     item.backDesign?.snapshotUrl || item.backDesign?.imageUrl || ''} 
                                 alt="Cart design" 
                                 className="w-12 h-12 object-contain bg-white rounded border"
                               />
@@ -219,7 +252,9 @@ const VRTryOn: React.FC = () => {
                                 {item.frontDesign?.design || item.backDesign?.design || 'Custom Design'}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {frontDesign && backDesign ? 'Front & Back' : frontDesign ? 'Front Only' : 'Back Only'}
+                                {(item.frontDesign?.imageUrl || item.frontDesign?.snapshotUrl) && 
+                                 (item.backDesign?.imageUrl || item.backDesign?.snapshotUrl) ? 'Front & Back' : 
+                                 (item.frontDesign?.imageUrl || item.frontDesign?.snapshotUrl) ? 'Front Only' : 'Back Only'}
                               </p>
                               <p className="text-xs text-gray-400">
                                 Added {new Date(item.addedAt).toLocaleDateString()}
@@ -260,6 +295,64 @@ const VRTryOn: React.FC = () => {
                 )}
               </button>
 
+              {/* Post-Generation Controls */}
+              {tryOnResult && (
+                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-700 flex items-center">
+                    <Palette className="w-4 h-4 mr-2" />
+                    Enhance Your Try-On
+                  </h3>
+                  
+                  {/* Background/Lighting Modification */}
+                  <div className="flex space-x-2">
+                    <input
+                      value={backgroundPrompt}
+                      onChange={(e) => setBackgroundPrompt(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && modifyBackground()}
+                      placeholder="Change background or lighting (e.g., 'beach sunset', 'studio lighting')"
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-gray-300"
+                      disabled={loading}
+                    />
+                    <button
+                      onClick={modifyBackground}
+                      disabled={loading || !backgroundPrompt.trim()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                    </button>
+                  </div>
+
+                  {/* Video Mode Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Visualization Mode</span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setVideoMode(false)}
+                        className={`flex items-center space-x-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          !videoMode 
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        <ImageIcon className="w-3 h-3" />
+                        <span>Photo</span>
+                      </button>
+                      <button
+                        onClick={() => setVideoMode(true)}
+                        className={`flex items-center space-x-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                          videoMode 
+                            ? 'bg-purple-100 text-purple-700 border border-purple-300' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        <Video className="w-3 h-3" />
+                        <span>Video</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Error Display */}
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -273,17 +366,47 @@ const VRTryOn: React.FC = () => {
               <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50" style={{ aspectRatio: '3/4', minHeight: '400px' }}>
                 {tryOnResult ? (
                   <div className="relative h-full">
-                    <img 
-                      src={tryOnResult} 
-                      alt="VR Try-On Result" 
-                      className="w-full h-full object-cover"
-                    />
+                    {videoMode ? (
+                      // Video Mode - Animated preview with themed backgrounds
+                      <div className="w-full h-full bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="relative">
+                            <img 
+                              src={tryOnResult} 
+                              alt="VR Try-On Result" 
+                              className="w-48 h-64 object-cover rounded-lg shadow-lg animate-pulse"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-lg"></div>
+                            <div className="absolute bottom-2 left-2 right-2">
+                              <div className="bg-white/90 backdrop-blur-sm rounded px-2 py-1">
+                                <p className="text-xs font-medium text-gray-800">Video Preview Mode</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-4 space-y-2">
+                            <div className="flex justify-center space-x-2">
+                              <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                            </div>
+                            <p className="text-sm text-gray-600">Dynamic visualization active</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Photo Mode - Static high-quality result
+                      <img 
+                        src={tryOnResult} 
+                        alt="VR Try-On Result" 
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                     <div className="absolute top-4 right-4">
                       <button
                         onClick={() => {
                           const link = document.createElement('a');
                           link.href = tryOnResult;
-                          link.download = `vr-tryon-${Date.now()}.png`;
+                          link.download = `vr-tryon-${videoMode ? 'video' : 'photo'}-${Date.now()}.png`;
                           link.click();
                         }}
                         className="p-2 bg-white/90 rounded-lg shadow-lg hover:bg-white transition-colors"

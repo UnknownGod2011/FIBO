@@ -193,9 +193,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   // Handle clipboard paste with FIBO processing
   const handleClipboardPaste = async () => {
     try {
-      // Start the 10-second loading indicator immediately
+      // Start the 15-second loading indicator immediately
       setShowClipboardLoading(true);
-      setTimeout(() => setShowClipboardLoading(false), 10000); // 10 seconds
+      setTimeout(() => setShowClipboardLoading(false), 15000); // 15 seconds
       
       const clipboardItems = await navigator.clipboard.read();
       
