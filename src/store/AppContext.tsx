@@ -50,6 +50,13 @@ export interface CartItem {
     backSnapshotUrl?: string;
     lastUsedForAR?: string;
   };
+  // Collection item specific data
+  collectionItem?: {
+    isCollectionItem: boolean;
+    completeProductImage: string | null;
+    productName: string;
+    category: string;
+  };
 }
 
 export interface DesignAlignment {

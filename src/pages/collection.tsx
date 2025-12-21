@@ -66,12 +66,13 @@ const Collection: React.FC = () => {
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
 
   const handleAddToCart = (product: Product) => {
-    // Create a cart item from the collection product
+    // For collection items, create a cart item that represents a complete T-shirt product
+    // not a design to be pasted on a blank T-shirt
     const cartItem: CartItem = {
       id: `collection-${product.id}-${Date.now()}`,
       frontDesign: {
-        imageUrl: product.image || null,
-        design: product.name,
+        imageUrl: null, // No design to paste
+        design: "Complete T-shirt product",
         alignment: {
           x: 205,
           y: 280,
@@ -89,6 +90,13 @@ const Collection: React.FC = () => {
       size: "M", // Default size
       addedAt: new Date().toISOString(),
       price: 24.99, // Convert from string price to number
+      // Add collection-specific data
+      collectionItem: {
+        isCollectionItem: true,
+        completeProductImage: product.image || null,
+        productName: product.name,
+        category: product.category,
+      }
     };
 
     addToCart(cartItem);

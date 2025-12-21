@@ -99,55 +99,68 @@ export default function Cart() {
               >
                 {/* T-shirt Previews - Front & Back */}
                 <div className="flex space-x-3 flex-shrink-0">
-                  {/* Front Preview */}
-                  <div className="relative w-20 h-20">
-                    <img
-                      src="/mockups/tshirt.png"
-                      alt="T-shirt front"
-                      className="w-full h-full object-contain"
-                    />
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        backgroundColor: item.tshirtColor,
-                        mixBlendMode: "multiply",
-                        opacity: 0.75,
-                        maskImage: "url(/mockups/tshirt.png)",
-                        WebkitMaskImage: "url(/mockups/tshirt.png)",
-                        maskRepeat: "no-repeat",
-                        maskPosition: "center",
-                        maskSize: "contain",
-                      }}
-                    />
-                    {(item.frontDesign.imageUrl || item.frontDesign.snapshotUrl) && (
-                      <div 
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ isolation: 'isolate' }}
-                      >
-                        {item.frontDesign.snapshotUrl ? (
-                          // Use canvas-generated snapshot for perfect accuracy
-                          <img
-                            src={item.frontDesign.snapshotUrl}
-                            alt="Front design snapshot"
-                            className="absolute inset-0 w-full h-full object-contain"
-                            style={{
-                              mixBlendMode: "normal",
-                              opacity: 1,
-                              filter: "none"
-                            }}
-                          />
-                        ) : (
-                          // Enhanced fallback with better positioning
-                          <img
-                            src={item.frontDesign.imageUrl!}
-                            alt="Front design"
-                            className="absolute object-contain"
-                            style={{
-                              // Scale alignment to cart preview size (80px container)
-                              width: item.frontDesign.alignment 
-                                ? `${(item.frontDesign.alignment.width / 560) * 80}px` 
-                                : '21px', // (150/560)*80
-                              height: item.frontDesign.alignment 
+                  {/* Check if this is a collection item */}
+                  {item.collectionItem?.isCollectionItem ? (
+                    /* Collection Item - Show complete product image */
+                    <div className="relative w-20 h-20">
+                      <img
+                        src={item.collectionItem.completeProductImage || "/mockups/tshirt.png"}
+                        alt={item.collectionItem.productName}
+                        className="w-full h-full object-contain rounded"
+                      />
+                    </div>
+                  ) : (
+                    /* Regular Custom Design - Show T-shirt with design overlay */
+                    <>
+                      {/* Front Preview */}
+                      <div className="relative w-20 h-20">
+                        <img
+                          src="/mockups/tshirt.png"
+                          alt="T-shirt front"
+                          className="w-full h-full object-contain"
+                        />
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            backgroundColor: item.tshirtColor,
+                            mixBlendMode: "multiply",
+                            opacity: 0.75,
+                            maskImage: "url(/mockups/tshirt.png)",
+                            WebkitMaskImage: "url(/mockups/tshirt.png)",
+                            maskRepeat: "no-repeat",
+                            maskPosition: "center",
+                            maskSize: "contain",
+                          }}
+                        />
+                        {(item.frontDesign.imageUrl || item.frontDesign.snapshotUrl) && (
+                          <div 
+                            className="absolute inset-0 pointer-events-none"
+                            style={{ isolation: 'isolate' }}
+                          >
+                            {item.frontDesign.snapshotUrl ? (
+                              // Use canvas-generated snapshot for perfect accuracy
+                              <img
+                                src={item.frontDesign.snapshotUrl}
+                                alt="Front design snapshot"
+                                className="absolute inset-0 w-full h-full object-contain"
+                                style={{
+                                  mixBlendMode: "normal",
+                                  opacity: 1,
+                                  filter: "none"
+                                }}
+                              />
+                            ) : (
+                              // Enhanced fallback with better positioning
+                              <img
+                                src={item.frontDesign.imageUrl!}
+                                alt="Front design"
+                                className="absolute object-contain"
+                                style={{
+                                  // Scale alignment to cart preview size (80px container)
+                                  width: item.frontDesign.alignment 
+                                    ? `${(item.frontDesign.alignment.width / 560) * 80}px` 
+                                    : '21px', // (150/560)*80
+                                  height: item.frontDesign.alignment 
                                 ? `${(item.frontDesign.alignment.height / 700) * 80}px` 
                                 : '17px', // (150/700)*80
                               top: item.frontDesign.alignment 
@@ -244,14 +257,30 @@ export default function Cart() {
                       Back
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Item Details */}
                 <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">Custom T-shirt</h3>
+                  <h3 className="font-medium text-gray-900">
+                    {item.collectionItem?.isCollectionItem 
+                      ? item.collectionItem.productName 
+                      : 'Custom T-shirt'
+                    }
+                  </h3>
                   <div className="text-sm text-gray-600 space-y-1">
-                    <p>Front: {item.frontDesign.imageUrl ? item.frontDesign.design : 'No design'}</p>
-                    <p>Back: {item.backDesign.imageUrl ? item.backDesign.design : 'No design'}</p>
+                    {item.collectionItem?.isCollectionItem ? (
+                      <>
+                        <p>Category: {item.collectionItem.category}</p>
+                        <p>Complete T-shirt design</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Front: {item.frontDesign.imageUrl ? item.frontDesign.design : 'No design'}</p>
+                        <p>Back: {item.backDesign.imageUrl ? item.backDesign.design : 'No design'}</p>
+                      </>
+                    )}
                     <p>
                       Color: <span className="inline-block w-4 h-4 rounded-full border border-gray-300 ml-1" style={{ backgroundColor: item.tshirtColor }} />
                     </p>
