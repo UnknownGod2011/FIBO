@@ -1,5 +1,7 @@
-import React from "react";
-import { Sparkles } from "lucide-react";
+import React, { useState } from "react";
+import { Sparkles, ShoppingCart, Check } from "lucide-react";
+import { useCartState } from "../store/AppContext";
+import { CartItem } from "../store/AppContext";
 
 interface Product {
   id: number;
@@ -15,7 +17,7 @@ const products: Product[] = [
     id: 1,
     name: "Golden Treasure Tee",
     category: "Exclusive Collection",
-    price: "₹899",
+    price: "$24.99",
     image: "/TeeCollection/Tee1.png",
     available: true,
   },
@@ -23,7 +25,7 @@ const products: Product[] = [
     id: 2,
     name: "Retro Gaming Tee",
     category: "Exclusive Collection",
-    price: "₹899",
+    price: "$24.99",
     image: "/TeeCollection/Tee2.png",
     available: true,
   },
@@ -31,7 +33,7 @@ const products: Product[] = [
     id: 3,
     name: "Chess Master Tee",
     category: "Exclusive Collection",
-    price: "₹899",
+    price: "$24.99",
     image: "/TeeCollection/Tee3.png",
     available: true,
   },
@@ -39,7 +41,7 @@ const products: Product[] = [
     id: 4,
     name: "Urban Style Hoodie",
     category: "Exclusive Collection",
-    price: "₹899",
+    price: "$24.99",
     image: "/TeeCollection/Tee4.png",
     available: true,
   },
@@ -60,6 +62,49 @@ const products: Product[] = [
 ];
 
 const Collection: React.FC = () => {
+  const { addToCart } = useCartState();
+  const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
+
+  const handleAddToCart = (product: Product) => {
+    // Create a cart item from the collection product
+    const cartItem: CartItem = {
+      id: `collection-${product.id}-${Date.now()}`,
+      frontDesign: {
+        imageUrl: product.image || null,
+        design: product.name,
+        alignment: {
+          x: 205,
+          y: 280,
+          width: 150,
+          height: 150,
+          rotation: 0,
+        },
+      },
+      backDesign: {
+        imageUrl: null,
+        design: "No back design",
+      },
+      tshirtColor: "#000000", // Default black
+      material: "Cotton",
+      size: "M", // Default size
+      addedAt: new Date().toISOString(),
+      price: 24.99, // Convert from string price to number
+    };
+
+    addToCart(cartItem);
+    
+    // Show green tick feedback
+    setAddedItems(prev => new Set(prev).add(product.id));
+    
+    // Remove the tick after 2 seconds
+    setTimeout(() => {
+      setAddedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(product.id);
+        return newSet;
+      });
+    }, 2000);
+  };
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-white via-blue-50/40 to-purple-50 overflow-hidden">
       {/* Animated Crystal Background */}
@@ -107,7 +152,27 @@ const Collection: React.FC = () => {
                 <div className="p-4">
                   <h2 className="text-lg font-semibold text-gray-900">{item.name}</h2>
                   <p className="text-sm text-gray-600">{item.category}</p>
-                  <p className="text-md font-bold text-gray-800 mt-1">{item.price}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-md font-bold text-gray-800">{item.price}</p>
+                    <button
+                      onClick={() => handleAddToCart(item)}
+                      disabled={addedItems.has(item.id)}
+                      className={`
+                        relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300
+                        ${addedItems.has(item.id) 
+                          ? 'bg-green-500 text-white scale-110' 
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800'
+                        }
+                      `}
+                      title={addedItems.has(item.id) ? "Added to cart!" : "Add to cart"}
+                    >
+                      {addedItems.has(item.id) ? (
+                        <Check className="w-5 h-5 animate-pulse" />
+                      ) : (
+                        <ShoppingCart className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

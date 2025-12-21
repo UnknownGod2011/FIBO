@@ -1,7 +1,7 @@
 
 import { Link, Routes, Route } from 'react-router-dom';
 import { Sparkles, ShoppingCart } from 'lucide-react';
-import { AppProvider, useTshirtState, useDesignState } from './store/AppContext';
+import { AppProvider, useTshirtState, useDesignState, useCartState } from './store/AppContext';
 import TShirtMockup from './components/TShirtMockup';
 import ControlPanel from './components/ControlPanel';
 import Collection from './pages/collection';
@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 function AppContent() {
   const { tshirtColor, setTshirtColor } = useTshirtState();
   const { currentImage, currentSide, switchSide } = useDesignState();
+  const { cartItems } = useCartState();
 
   // Wake up Render backend on app load
   useEffect(() => {
@@ -96,7 +97,14 @@ function AppContent() {
               onClick={() => console.log('Navigating to cart')}
             >
               <span>Your Cart</span>
-              <ShoppingCart size={20} className="text-green-500" />
+              <div className="relative">
+                <ShoppingCart size={20} className="text-green-500" />
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {cartItems.length}
+                  </span>
+                )}
+              </div>
             </Link>
           </nav>
         </div>

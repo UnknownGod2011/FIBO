@@ -18,8 +18,8 @@ console.log('🔧 API Configuration:', {
 });
 
 const PRESET_COLORS = [
-  '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF',
-  '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080'
+  '#000000', '#FFFFFF', '#8B4B3B', '#6B8E5A', '#4A6B8A',
+  '#D4B86A', '#A67B8B', '#5A8B8B', '#D2A574', '#7A5A8B'
 ];
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
