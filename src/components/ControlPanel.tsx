@@ -558,7 +558,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               alt="Uploaded design" 
               className="w-12 h-12 object-cover rounded border border-gray-300"
             />
-            <span className="text-sm text-gray-600">Design ready for use</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">Design ready for use</span>
+              {isProcessingUpload && (
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
             <button
               onClick={() => {
                 setUploadedDesign(null);
