@@ -883,25 +883,27 @@ app.post("/api/generate-vector", async (req, res) => {
 });
 
 /**
- * Virtual Try-On using FIBO GenFill
+ * Virtual Try-On using BRIA Background Replace approach
  */
 app.post("/api/virtual-tryon", async (req, res) => {
   try {
     const { userPhoto, designUrl, designPrompt } = req.body;
     
     // Validate input
-    if (!userPhoto || !designUrl || !designPrompt) {
+    if (!userPhoto || !designPrompt) {
       return res.status(400).json({
         success: false,
-        error: { message: "User photo, design URL, and design prompt are required" }
+        error: { message: "User photo and design prompt are required" }
       });
     }
 
-    console.log(`👕 Starting virtual try-on with design: "${designPrompt}"`);
+    console.log(`👕 Starting VR try-on with design: "${designPrompt}"`);
 
     // Step 1: Remove background from user photo
+    console.log('🧹 Step 1: Removing background from user photo...');
+    
     const bgRemovalResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/remove_background`, {
-      image: userPhoto,
+      image: userPhoto, // Expecting base64 without data URL prefix
       sync: false
     });
 
@@ -910,9 +912,12 @@ app.post("/api/virtual-tryon", async (req, res) => {
     }
 
     const bgRemovedResult = await pollBriaStatus(bgRemovalResult.data.request_id);
+    console.log('✅ Background removed successfully');
     
     // Step 2: Generate person wearing the T-shirt using background replacement
-    const tryOnPrompt = `person wearing a t-shirt with ${designPrompt} design, realistic fabric texture, studio lighting, professional photography, high quality`;
+    console.log('🎨 Step 2: Generating person with T-shirt design...');
+    
+    const tryOnPrompt = `person wearing a t-shirt with ${designPrompt}, realistic fabric texture, studio lighting, professional photography, high quality, detailed clothing`;
     
     const tryOnResult = await briaRequest(`${BRIA_EDIT_BASE_URL}/replace_background`, {
       image: bgRemovedResult.imageUrl,
@@ -927,20 +932,21 @@ app.post("/api/virtual-tryon", async (req, res) => {
     const finalResult = await pollBriaStatus(tryOnResult.data.request_id);
     
     // Download and save locally
-    const filename = `tryon_${Date.now()}.png`;
+    const filename = `vr_tryon_${Date.now()}.png`;
     const localUrl = await downloadAndSaveImage(finalResult.imageUrl, filename);
 
-    console.log(`✅ Virtual try-on completed successfully`);
+    console.log(`✅ VR try-on completed successfully`);
 
     res.json({
       success: true,
-      message: "Virtual try-on generated successfully",
+      message: "VR try-on generated successfully",
       imageUrl: localUrl,
-      originalUrl: finalResult.imageUrl
+      originalUrl: finalResult.imageUrl,
+      method: "bria_background_replace"
     });
 
   } catch (error) {
-    console.error("Virtual try-on error:", error.message);
+    console.error("VR try-on error:", error.message);
     res.status(500).json({
       success: false,
       error: { message: error.message }

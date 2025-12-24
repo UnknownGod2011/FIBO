@@ -64,7 +64,7 @@ const VRTryOn: React.FC = () => {
   };
 
   const generateVirtualTryOn = async () => {
-    if (!userPhoto || !selectedDesign || !designPrompt) {
+    if (!userPhoto || !designPrompt) {
       setError('Please upload your photo and select a design first');
       return;
     }
@@ -73,25 +73,41 @@ const VRTryOn: React.FC = () => {
     setError(null);
     
     try {
-      // Placeholder logic for try-on generation (FIBO API not finalized)
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate processing
+      // Get API URL
+      const API_URL = import.meta.env.VITE_API_URL || 
+        (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://fibo-t5mv.onrender.com');
       
-      // Mock result - in production this would be the actual API response
-      const mockResult = selectedDesign; // Use selected design as placeholder
-      setTryOnResult(mockResult);
+      // Prepare user photo (remove data URL prefix for API)
+      const photoBase64 = userPhoto.includes(',') ? userPhoto.split(',')[1] : userPhoto;
       
-      // Real API call would be:
-      // const response = await fetch(`${import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://fibo-t5mv.onrender.com')}/api/virtual-tryon`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     userPhoto: userPhoto.split(',')[1], // Remove data:image/jpeg;base64,
-      //     designUrl: selectedDesign,
-      //     designPrompt: designPrompt
-      //   })
-      // });
+      console.log('🚀 Starting VR Try-On generation...');
+      
+      const response = await fetch(`${API_URL}/api/virtual-tryon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPhoto: photoBase64,
+          designUrl: selectedDesign,
+          designPrompt: designPrompt
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setTryOnResult(result.imageUrl);
+        console.log('✅ VR Try-On completed successfully');
+      } else {
+        throw new Error(result.error?.message || 'Unknown error occurred');
+      }
       
     } catch (err: any) {
+      console.error('❌ VR Try-On failed:', err);
       setError(err.message || 'Failed to generate virtual try-on');
     } finally {
       setLoading(false);
@@ -280,13 +296,13 @@ const VRTryOn: React.FC = () => {
               {/* Generate Button */}
               <button
                 onClick={generateVirtualTryOn}
-                disabled={!userPhoto || !selectedDesign || loading}
+                disabled={!userPhoto || !designPrompt || loading}
                 className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Generating VR Try-On...</span>
+                    <span>Generating VR Try-On... (30-60s)</span>
                   </>
                 ) : (
                   <span>Generate VR Try-On</span>
